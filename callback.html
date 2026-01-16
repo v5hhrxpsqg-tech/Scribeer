@@ -70,16 +70,23 @@
             const tokenHash = params.get('token_hash');
             const type = params.get('type');
             const error = params.get('error');
-            
+            const errorDescription = params.get('error_description');
+            const errorCode = params.get('error_code');
+
             // Debug: log alles naar console
             console.log('Hash:', hash);
             console.log('Search:', search);
             console.log('Access Token:', accessToken);
             console.log('Token:', token);
             console.log('Type:', type);
-            
+            console.log('Error:', error);
+            console.log('Error Description:', errorDescription);
+
             if (error) {
-                window.location.href = `https://www.scribeer.nl?error=${error}`;
+                let errorUrl = `https://www.scribeer.nl?error=${error}`;
+                if (errorDescription) errorUrl += `&error_description=${encodeURIComponent(errorDescription)}`;
+                if (errorCode) errorUrl += `&error_code=${errorCode}`;
+                window.location.href = errorUrl;
             } else if (accessToken) {
                 // Tokens gevonden in hash
                 let url = `https://www.scribeer.nl?access_token=${accessToken}`;
