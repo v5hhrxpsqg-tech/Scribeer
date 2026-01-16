@@ -71,11 +71,18 @@ if "access_token" in params:
     st.sidebar.write(f"Token lengte: {len(access_token)}")
 
     try:
-        # Verifieer de sessie met de tokens
-        auth_response = supabase.auth.set_session(access_token, refresh_token)
+        # Verifieer de sessie met de tokens (Supabase v2 syntax)
+        auth_response = supabase.auth.set_session(
+            access_token=access_token,
+            refresh_token=refresh_token
+        )
 
         st.sidebar.success("✅ Set session succesvol!")
         st.sidebar.write(f"Response type: {type(auth_response)}")
+
+        # Verify the session was actually set
+        test_session = supabase.auth.get_session()
+        st.sidebar.write(f"Session check: {test_session is not None}")
 
         # Clear URL parameters and error
         st.session_state.auth_error = None
@@ -88,7 +95,9 @@ if "access_token" in params:
         error_details = {
             'message': str(e),
             'repr': repr(e),
-            'traceback': traceback.format_exc()
+            'traceback': traceback.format_exc(),
+            'access_token_length': len(access_token),
+            'refresh_token_length': len(refresh_token) if refresh_token else 0
         }
         st.session_state.auth_error = error_details
 
