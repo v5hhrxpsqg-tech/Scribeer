@@ -43,21 +43,51 @@ if params:
     st.sidebar.write("🔍 Debug - URL params:")
     st.sidebar.write(dict(params))
 
+# Check voor error in URL
+if "error" in params:
+    error_msg = params.get("error_description", params.get("error", "Onbekende fout"))
+    st.error(f"❌ Login fout: {error_msg}")
+    st.sidebar.error(f"Error details: {error_msg}")
+    st.query_params.clear()
+
 # Check voor tokens in URL (van magic link)
 if "access_token" in params:
     try:
-        supabase.auth.set_session(params["access_token"], params.get("refresh_token", ""))
+        access_token = params["access_token"]
+        refresh_token = params.get("refresh_token", "")
+
+        st.sidebar.info(f"🔑 Token ontvangen, probeer in te loggen...")
+
+        # Verifieer de sessie met de tokens
+        response = supabase.auth.set_session(access_token, refresh_token)
+
         st.query_params.clear()
         st.success("✅ Succesvol ingelogd!")
         st.rerun()
     except Exception as e:
-        st.error(f"Login fout: {e}")
+        st.error(f"❌ Login fout: {str(e)}")
+        st.sidebar.error(f"Token error: {str(e)}")
         st.query_params.clear()
 
-# Check voor error in URL
-if "error" in params:
-    st.error(f"Login fout: {params.get('error_description', 'Onbekende fout')}")
-    st.query_params.clear()
+# Alternatieve Supabase methode: token + type parameters
+if "token" in params and params.get("type") == "magiclink":
+    try:
+        token = params["token"]
+        st.sidebar.info(f"🔑 Magic link token ontvangen...")
+
+        # Verifieer de OTP token
+        response = supabase.auth.verify_otp({
+            "token": token,
+            "type": "magiclink"
+        })
+
+        st.query_params.clear()
+        st.success("✅ Succesvol ingelogd!")
+        st.rerun()
+    except Exception as e:
+        st.error(f"❌ Token verificatie fout: {str(e)}")
+        st.sidebar.error(f"OTP error: {str(e)}")
+        st.query_params.clear()
 
 # Check authenticatie status
 user = None
@@ -185,7 +215,7 @@ if not is_logged_in:
                         supabase.auth.sign_in_with_otp({
                             "email": email,
                             "options": {
-                                "email_redirect_to": "https://v5hhrxpsqg-tech.github.io/Scribeer/callback.html"
+                                "email_redirect_to": "https://scribeer.nl"
                             }
                         })
                         st.session_state.magic_link_sent = True
