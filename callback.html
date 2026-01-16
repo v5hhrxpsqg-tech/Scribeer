@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inloggen...</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            text-align: center;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        h2 {
+            color: #333;
+            margin: 0;
+        }
+        p {
+            color: #666;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="spinner"></div>
+        <h2>Inloggen...</h2>
+        <p>Je wordt doorgestuurd naar Scribeer</p>
+    </div>
+
+    <script>
+        function handleCallback() {
+            // Probeer hash fragment (#access_token=...)
+            const hash = window.location.hash.substring(1);
+            const search = window.location.search.substring(1);
+            
+            let params = new URLSearchParams(hash);
+            
+            // Als geen hash, probeer query params
+            if (!params.has('access_token') && search) {
+                params = new URLSearchParams(search);
+            }
+            
+            const accessToken = params.get('access_token');
+            const refreshToken = params.get('refresh_token');
+            const token = params.get('token');
+            const tokenHash = params.get('token_hash');
+            const type = params.get('type');
+            const error = params.get('error');
+            
+            // Debug: log alles naar console
+            console.log('Hash:', hash);
+            console.log('Search:', search);
+            console.log('Access Token:', accessToken);
+            console.log('Token:', token);
+            console.log('Type:', type);
+            
+            if (error) {
+                window.location.href = `https://scribeer.nl?error=${error}`;
+            } else if (accessToken) {
+                // Tokens gevonden in hash
+                let url = `https://scribeer.nl?access_token=${accessToken}`;
+                if (refreshToken) url += `&refresh_token=${refreshToken}`;
+                window.location.href = url;
+            } else if (token && type === 'magiclink') {
+                // Magic link token
+                window.location.href = `https://scribeer.nl?token=${token}&type=magiclink`;
+            } else if (tokenHash) {
+                // Token hash (oude Supabase methode)
+                window.location.href = `https://scribeer.nl?token_hash=${tokenHash}&type=${type}`;
+            } else {
+                // Niets gevonden, stuur terug
+                window.location.href = 'https://scribeer.nl?error=no_tokens';
+            }
+        }
+
+        handleCallback();
+    </script>
+</body>
+</html>
