@@ -17,29 +17,41 @@ st.sidebar.header("⚙️ Instellingen")
 target_lang = st.sidebar.selectbox("Vertaal naar (optioneel):", ["Geen (originele taal)", "Nederlands", "Engels", "Duits", "Frans", "Spaans"])
 output_format = st.sidebar.radio("Standaard download formaat:", ["Word (.docx)", "PDF (.pdf)", "Tekst (.txt)"])
 
-# Loguit knop voor als men ingelogd is
 if st.session_state.ingelogd:
     if st.sidebar.button("Uitloggen"):
         st.session_state.ingelogd = False
         st.rerun()
 
-# API Client (Let op: verplaats dit later naar Render Secrets!)
 client = OpenAI(api_key="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")
 
-# --- 3. FUNCTIE VOOR AUDIO VERWERKEN ---
+# --- 3. DE VERBETERDE VEILIGE FUNCTIE (VERVANGT DE OUDE) ---
 def transcribe_large_audio(file, is_guest):
-    audio = AudioSegment.from_file(file)
-    
-    # LIMIET VOOR GASTEN: Kap af op 10 minuten
-    if is_guest:
-        max_time = 10 * 60 * 1000
-        audio = audio[:max_time]
-    
-    ten_minutes = 10 * 60 * 1000 
+    # Check bestandsgrootte voordat we RAM belasten
+    file.seek(0, os.SEEK_END)
+    file_size = file.tell() / (1024 * 1024) 
+    file.seek(0)
+
+    # Blokkeer te grote bestanden voor gasten (voorkomt Render crash)
+    if is_guest and file_size > 25:
+        st.error("⚠️ Dit bestand is te groot voor de gratis versie (max 25MB).")
+        st.info("Maak een account aan om grotere bestanden te verwerken.")
+        st.stop()
+
+    with st.spinner("Audio voorbereiden en inkorten..."):
+        audio = AudioSegment.from_file(file)
+        # Voor gasten: Snijd fysiek af bij 10 min (bespaart OpenAI kosten)
+        if is_guest:
+            ten_minutes = 10 * 60 * 1000
+            if len(audio) > ten_minutes:
+                audio = audio[:ten_minutes]
+                st.warning("⏱️ Alleen de eerste 10 minuten worden verwerkt als gast.")
+
+    # Splitsen voor Whisper
+    chunk_length = 10 * 60 * 1000 
     chunks = []
     
-    for i in range(0, len(audio), ten_minutes):
-        chunk = audio[i:i+ten_minutes]
+    for i in range(0, len(audio), chunk_length):
+        chunk = audio[i:i+chunk_length]
         chunk_path = f"temp_chunk_{i}.mp3"
         chunk.export(chunk_path, format="mp3")
         
@@ -47,6 +59,7 @@ def transcribe_large_audio(file, is_guest):
             response = client.audio.transcriptions.create(model="whisper-1", file=f)
             chunks.append(response.text)
         os.remove(chunk_path)
+        
     return " ".join(chunks)
 
 # --- 4. HOOFDSCHERM ---
@@ -62,16 +75,16 @@ uploaded_file = st.file_uploader("Upload audio (MP3, WAV, M4A)", type=["mp3", "w
 if uploaded_file:
     if st.button("Start Verwerking"):
         with st.spinner("Bezig met verwerken..."):
-            # 1. Transcriberen
             try:
+                # Roep de veilige functie aan
                 full_text = transcribe_large_audio(uploaded_file, is_guest=not st.session_state.ingelogd)
             except Exception as e:
-                st.error(f"Fout bij transcriptie: {e}")
+                st.error(f"Fout bij verwerking: {e}")
                 st.stop()
 
-            # 2. AI Optimalisatie
+            # AI Optimalisatie
             with st.spinner("AI optimalisatie en vertaling..."):
-                prompt = "Verdeel de tekst in duidelijke alinea's en herken verschillende sprekers indien mogelijk. "
+                prompt = "Verdeel de tekst in duidelijke alinea's en sprekers. "
                 if target_lang != "Geen (originele taal)":
                     prompt += f"Vertaal de gehele tekst naar het {target_lang}."
                 
@@ -86,53 +99,38 @@ if uploaded_file:
 
             st.success("Verwerking voltooid!")
 
-            # --- 5. DE PAYWALL LOGICA ---
+            # --- 5. PAYWALL LOGICA ---
             if not st.session_state.ingelogd:
-                # GAST MODUS: Preview van 40% tonen
+                # Gast ziet maar 40%
                 preview_lengte = int(len(final_text) * 0.4)
-                preview_tekst = final_text[:preview_lengte]
-                
                 st.subheader("Voorbeeld van je transcriptie")
-                st.write(preview_tekst + "...")
+                st.write(final_text[:preview_lengte] + "...")
                 
-                # De "Verleidings" box
                 st.markdown("""
                     <div style="background-color:#f0f2f6; padding:20px; border-radius:10px; border:2px solid #ff4b4b; margin-top:20px;">
                         <h3 style="color:#ff4b4b; margin-top:0;">🔒 De volledige transcriptie is klaar!</h3>
-                        <p>Je ziet nu een gratis voorbeeld van 40%. Wil je het volledige resultaat zien en kunnen downloaden?</p>
-                        <ul>
-                            <li><b>Volledige tekst</b> direct zichtbaar</li>
-                            <li>Exporteren naar <b>Word, PDF of Tekst</b></li>
-                            <li><b>2 extra credits</b> gratis bij registratie</li>
-                        </ul>
+                        <p>Maak een gratis account aan om het volledige resultaat te zien en te kunnen downloaden.</p>
                     </div>
                 """, unsafe_allow_html=True)
                 
-                if st.button("👉 Maak een gratis account om alles te zien"):
-                    st.session_state.ingelogd = True # Voor nu simuleren we inlog, straks koppelen we Google
+                if st.button("👉 Maak een gratis account"):
+                    st.session_state.ingelogd = True
                     st.rerun()
-            
             else:
-                # PRO MODUS: Alles tonen en downloads toestaan
                 st.subheader("Resultaat:")
                 st.text_area("Volledige transcriptie:", final_text, height=400)
-
-                # --- EXPORT KNOPPEN (Alleen voor Pro) ---
-                col1, col2, col3 = st.columns(3)
                 
+                # Download knoppen
+                col1, col2 = st.columns(2)
                 with col1:
                     doc = Document()
                     doc.add_paragraph(final_text)
                     bio = BytesIO()
                     doc.save(bio)
                     st.download_button("Download Word", bio.getvalue(), "transcript.docx")
-                
                 with col2:
                     pdf = FPDF()
                     pdf.add_page()
                     pdf.set_font("Arial", size=12)
                     pdf.multi_cell(0, 10, txt=final_text.encode('latin-1', 'replace').decode('latin-1'))
                     st.download_button("Download PDF", pdf.output(dest='S'), "transcript.pdf")
-                
-                with col3:
-                    st.download_button("Download Tekst", final_text, "transcript.txt")
