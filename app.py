@@ -89,35 +89,45 @@ if "access_token" in params and 'login_error_shown' not in st.session_state:
     st.sidebar.write("Stap 1: Aanroepen set_session()...")
 
     try:
-        # Supabase Python client v2 syntax - expects access_token and refresh_token as separate params
-        st.sidebar.write("Methode: set_session aanroepen...")
+        # Alternative approach: Store tokens in session_state and use them directly
+        st.sidebar.write("Methode: Tokens opslaan in session_state...")
 
-        # The correct syntax is to pass both tokens separately
-        # But the error shows it needs them in a specific format
-        session_response = supabase.auth.set_session(
-            access_token=access_token,
-            refresh_token=refresh_token
+        # Save tokens to session state for persistent auth
+        st.session_state.access_token = access_token
+        st.session_state.refresh_token = refresh_token
+
+        # Try to get user with the access token
+        st.sidebar.write("Stap 2: Gebruiker ophalen met token...")
+
+        # Create a new supabase client with the access token
+        supabase_authed = create_client(
+            SUPABASE_URL,
+            SUPABASE_KEY,
+            options={
+                "headers": {
+                    "Authorization": f"Bearer {access_token}"
+                }
+            }
         )
 
-        st.sidebar.success("✅ Set session aangeroepen!")
+        # Try to get the user
+        user_response = supabase_authed.auth.get_user(access_token)
 
-        # Check if session is actually set
-        st.sidebar.write("Stap 2: Controleren sessie...")
-        current_session = supabase.auth.get_session()
-
-        if current_session:
-            st.sidebar.success("✅ Sessie is ingesteld!")
+        if user_response and user_response.user:
+            st.sidebar.success(f"✅ Gebruiker gevonden: {user_response.user.email}")
+            st.session_state.user = user_response.user
+            st.session_state.authenticated = True
             st.query_params.clear()
             st.success("✅ Succesvol ingelogd!")
             st.rerun()
         else:
-            st.sidebar.error("❌ Sessie is NIET ingesteld")
+            st.sidebar.error("❌ Geen gebruiker gevonden")
             # Save error and clear params
             st.session_state.login_error_shown = True
             st.session_state.auth_error = {
-                'message': 'Sessie kon niet worden ingesteld',
-                'repr': 'SessionNotSet',
-                'traceback': 'set_session() retourneerde geen sessie'
+                'message': 'Gebruiker kon niet worden opgehaald',
+                'repr': 'UserNotFound',
+                'traceback': 'get_user() retourneerde geen gebruiker'
             }
             st.query_params.clear()
             st.rerun()
@@ -159,14 +169,21 @@ if "token" in params and params.get("type") == "magiclink":
 # Check authenticatie status
 user = None
 is_logged_in = False
-try:
-    session = supabase.auth.get_session()
-    if session:
-        u_res = supabase.auth.get_user()
-        user = u_res.user if u_res else None
-        is_logged_in = bool(user)
-except Exception:
-    pass
+
+# Check if user is authenticated via our session_state method
+if st.session_state.get('authenticated') and st.session_state.get('user'):
+    user = st.session_state.user
+    is_logged_in = True
+else:
+    # Fallback: try the old method
+    try:
+        session = supabase.auth.get_session()
+        if session:
+            u_res = supabase.auth.get_user()
+            user = u_res.user if u_res else None
+            is_logged_in = bool(user)
+    except Exception:
+        pass
 
 # =================================================================
 # 3. AUDIO VERWERKING
@@ -236,7 +253,22 @@ with st.sidebar.expander("🔧 Debug Info"):
 if is_logged_in:
     st.sidebar.success(f"✅ Ingelogd als: {user.email}")
     if st.sidebar.button("Uitloggen"):
-        supabase.auth.sign_out()
+        # Clear our custom auth
+        if 'authenticated' in st.session_state:
+            del st.session_state.authenticated
+        if 'user' in st.session_state:
+            del st.session_state.user
+        if 'access_token' in st.session_state:
+            del st.session_state.access_token
+        if 'refresh_token' in st.session_state:
+            del st.session_state.refresh_token
+
+        # Also try the old method
+        try:
+            supabase.auth.sign_out()
+        except:
+            pass
+
         st.session_state.final_text = None
         st.session_state.magic_link_sent = False
         st.rerun()
