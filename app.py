@@ -73,11 +73,15 @@ if "access_token" in params and 'login_error_shown' not in st.session_state:
     st.sidebar.write("Stap 1: Aanroepen set_session()...")
 
     try:
-        # Supabase Python client v2 syntax
+        # Supabase Python client v2 syntax - expects access_token and refresh_token as separate params
         st.sidebar.write("Methode: set_session aanroepen...")
 
-        # Try calling with just the two parameters (most common method)
-        session_response = supabase.auth.set_session(access_token, refresh_token)
+        # The correct syntax is to pass both tokens separately
+        # But the error shows it needs them in a specific format
+        session_response = supabase.auth.set_session(
+            access_token=access_token,
+            refresh_token=refresh_token
+        )
 
         st.sidebar.success("✅ Set session aangeroepen!")
 
