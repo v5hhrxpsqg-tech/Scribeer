@@ -17,7 +17,6 @@ st.set_page_config(
 )
 
 # Sleutels ophalen uit de Render Environment Variables
-# NOOIT je sleutels hier letterlijk typen (i.v.m. je publieke GitHub)
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
@@ -39,27 +38,30 @@ if 'final_text' not in st.session_state:
     st.session_state.final_text = None
 
 # =================================================================
-# 2. GOOGLE OAUTH CALLBACK HANDLING
+# 2. OAUTH CALLBACK AFHANDELING & STATUS
 # =================================================================
-# Wanneer je terugkomt van de GitHub-tussenpagina, staan er tokens in de URL.
-# Dit blokje vangt die tokens op en logt je echt in bij Supabase.
-query_params = st.query_params
+params = st.query_params
 
-if "access_token" in query_params:
-    access_token = query_params["access_token"]
-    refresh_token = query_params.get("refresh_token", "")
-    
-    # Sessie herstellen bij Supabase
-    supabase.auth.set_session(access_token, refresh_token)
-    
-    # URL opschonen voor een nette look
+# Afhandeling van de inkomende tokens of codes van de callback-pagina
+if "access_token" in params:
+    # Route A: Implicit flow
+    supabase.auth.set_session(params["access_token"], params.get("refresh_token", ""))
     st.query_params.clear()
     st.rerun()
 
-# Controleren of we nu een actieve gebruiker hebben
+elif "code" in params:
+    # Route B: PKCE flow (De moderne methode die je nu gebruikt)
+    try:
+        supabase.auth.exchange_code_for_session({ "auth_code": params["code"] })
+        st.query_params.clear()
+        st.rerun()
+    except Exception as e:
+        st.error(f"Inlogfout: Kon de code niet verzilveren. {e}")
+
+# CRUCIAAL: Hier stellen we vast of de gebruiker is ingelogd voor de rest van de code
 try:
-    current_user_res = supabase.auth.get_user()
-    user = current_user_res.user
+    user_info = supabase.auth.get_user()
+    user = user_info.user
     is_logged_in = True if user else False
 except Exception:
     user = None
@@ -131,7 +133,7 @@ def process_audio_logic(audio_file, guest_mode):
 # =================================================================
 st.title("Scribeer.nl 🎙️")
 
-# Welkomsttekst (zoals gevraagd)
+# Welkomsttekst
 st.markdown("""
     **Welkom bij Scribeer!** Met deze AI-tool kan jij je audiobestanden uploaden en automatisch laten transcriberen. 
     De tool herkent zelf of er meerdere sprekers in het audiobestand voorkomen en maakt hier een automatische scheiding in. 
@@ -219,7 +221,7 @@ if st.session_state.final_text:
             "provider": "google",
             "options": {"redirect_to": CALLBACK_URL}
         })
-        st.link_button("👉 Nu inloggen met Google", pay_auth.url)
+        st.link_button("👉 Nu inloggen met Google voor volledig resultaat", pay_auth.url)
         
     else:
         # VOLLEDIG RESULTAAT VOOR LEDEN
