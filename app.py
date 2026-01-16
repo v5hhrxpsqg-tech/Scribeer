@@ -26,7 +26,7 @@ if st.session_state.ingelogd:
         st.session_state.final_text = None # Wis ook tekst bij uitloggen
         st.rerun()
 
-client = OpenAI(api_key="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")
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 # --- 3. DE VEILIGE FUNCTIE ---
 def transcribe_large_audio(file, is_guest):
