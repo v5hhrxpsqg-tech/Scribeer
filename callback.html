@@ -2,79 +2,34 @@
 <html lang="nl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Inloggen...</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        }
-        .container {
-            background: white;
-            padding: 40px;
-            border-radius: 20px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-            text-align: center;
-        }
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        h2 {
-            color: #333;
-            margin: 0;
-        }
-        p {
-            color: #666;
-            margin-top: 10px;
-        }
-    </style>
+    <title>Inloggen bij Scribeer...</title>
 </head>
-<body>
-    <div class="container">
-        <div class="spinner"></div>
-        <h2>Inloggen...</h2>
-        <p>Je wordt doorgestuurd naar Scribeer</p>
-    </div>
+<body style="font-family: sans-serif; text-align: center; padding-top: 50px;">
+    <h2>Sessie herstellen...</h2>
+    <p>Je wordt nu teruggestuurd naar Scribeer.nl</p>
 
     <script>
-        function handleOAuthCallback() {
-            const hash = window.location.hash.substring(1);
-            const params = new URLSearchParams(hash);
-            
-            const accessToken = params.get('access_token');
-            const refreshToken = params.get('refresh_token');
-            const error = params.get('error');
-            const errorDescription = params.get('error_description');
-            
-            if (error) {
-                window.location.href = `https://scribeer.nl?error=${error}&error_description=${errorDescription}`;
-            } else if (accessToken) {
-                let redirectUrl = `https://scribeer.nl?access_token=${accessToken}`;
-                if (refreshToken) {
-                    redirectUrl += `&refresh_token=${refreshToken}`;
-                }
-                window.location.href = redirectUrl;
-            } else {
-                window.location.href = 'https://scribeer.nl?error=no_tokens';
-            }
+        // Pak zowel de '?' (query) als de '#' (hash) parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        
+        const code = urlParams.get('code');
+        const token = hashParams.get('access_token');
+        
+        let target = "https://scribeer.nl";
+        
+        if (token) {
+            // Als we direct een token hebben (Implicit Flow)
+            target += "?access_token=" + token;
+            const refresh = hashParams.get('refresh_token');
+            if (refresh) target += "&refresh_token=" + refresh;
+        } else if (code) {
+            // Als we een code hebben (PKCE Flow, wat jij nu hebt)
+            target += "?code=" + code;
         }
-
-        handleOAuthCallback();
+        
+        // Stuur de gebruiker terug met de buit!
+        window.location.href = target;
     </script>
 </body>
 </html>
