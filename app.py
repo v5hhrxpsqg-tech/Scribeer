@@ -63,74 +63,74 @@ if "error" in params:
     st.query_params.clear()
 
 # Check voor tokens in URL (van magic link)
-if "access_token" in params:
+if "access_token" in params and 'login_error_shown' not in st.session_state:
     access_token = params["access_token"]
     refresh_token = params.get("refresh_token", "")
-
-    # Save initial state to check what's happening
-    if 'login_attempt' not in st.session_state:
-        st.session_state.login_attempt = {
-            'access_token_len': len(access_token),
-            'refresh_token_len': len(refresh_token) if refresh_token else 0,
-            'step': 'started'
-        }
 
     st.sidebar.info(f"🔑 Token ontvangen, probeer in te loggen...")
     st.sidebar.write(f"Token lengte: {len(access_token)}")
     st.sidebar.write(f"Refresh token lengte: {len(refresh_token) if refresh_token else 0}")
-
-    # Wrap in try-except but show error without reloading
     st.sidebar.write("Stap 1: Aanroepen set_session()...")
 
     try:
-        # Supabase Python client expects a session dict, not separate tokens
-        st.sidebar.write("Methode: Session dict aanmaken...")
-
-        session_data = {
-            "access_token": access_token,
-            "refresh_token": refresh_token
-        }
-
+        # Supabase Python client v2 syntax
         st.sidebar.write("Methode: set_session aanroepen...")
-        session_response = supabase.auth.set_session(session_data)
+
+        # Try calling with just the two parameters (most common method)
+        session_response = supabase.auth.set_session(access_token, refresh_token)
 
         st.sidebar.success("✅ Set session aangeroepen!")
-        st.sidebar.write(f"Response type: {type(session_response)}")
 
         # Check if session is actually set
         st.sidebar.write("Stap 2: Controleren sessie...")
         current_session = supabase.auth.get_session()
-        st.sidebar.write(f"Session exists: {current_session is not None}")
 
         if current_session:
             st.sidebar.success("✅ Sessie is ingesteld!")
-            st.session_state.login_attempt['step'] = 'success'
             st.query_params.clear()
             st.success("✅ Succesvol ingelogd!")
             st.rerun()
         else:
             st.sidebar.error("❌ Sessie is NIET ingesteld")
-            st.session_state.login_attempt['step'] = 'session_not_set'
-            st.error("Login mislukt: Sessie kon niet worden ingesteld")
-            st.stop()
-
-    except Exception as e:
-        # Show full error and STOP - don't reload!
-        import traceback
-        st.error(f"❌ FOUT: {str(e)}")
-        st.sidebar.error("🚨 ERROR DETAILS:")
-        st.sidebar.error(f"Type: {type(e).__name__}")
-        st.sidebar.error(f"Bericht: {str(e)}")
-        st.sidebar.code(traceback.format_exc(), language="python")
-
-        # Show manual retry button
-        st.warning("Gebruik de knop hieronder om opnieuw te proberen:")
-        if st.button("🔄 Opnieuw proberen", type="primary", key="retry_btn"):
+            # Save error and clear params
+            st.session_state.login_error_shown = True
+            st.session_state.auth_error = {
+                'message': 'Sessie kon niet worden ingesteld',
+                'repr': 'SessionNotSet',
+                'traceback': 'set_session() retourneerde geen sessie'
+            }
             st.query_params.clear()
             st.rerun()
 
-        # STOP HERE - don't auto reload
-        st.stop()
+    except Exception as e:
+        # Save error to session state and clear URL params
+        import traceback
+        st.session_state.login_error_shown = True
+        st.session_state.auth_error = {
+            'message': str(e),
+            'repr': repr(e),
+            'traceback': traceback.format_exc(),
+            'access_token_length': len(access_token),
+            'refresh_token_length': len(refresh_token) if refresh_token else 0
+        }
+        st.query_params.clear()
+        st.rerun()
+
+# If there's a login error, show it persistently
+if st.session_state.get('login_error_shown'):
+    st.error("❌ Login fout opgetreden")
+    with st.sidebar.expander("🚨 ERROR DETAILS", expanded=True):
+        if st.session_state.auth_error:
+            st.error(f"**Error:** {st.session_state.auth_error.get('repr', 'Unknown')}")
+            st.write(f"**Bericht:** {st.session_state.auth_error.get('message', 'Geen bericht')}")
+            st.code(st.session_state.auth_error.get('traceback', 'Geen traceback'), language="python")
+            if 'access_token_length' in st.session_state.auth_error:
+                st.write(f"**Token lengtes:** access={st.session_state.auth_error['access_token_length']}, refresh={st.session_state.auth_error['refresh_token_length']}")
+
+    if st.button("🔄 Probeer opnieuw", type="primary"):
+        st.session_state.login_error_shown = False
+        st.session_state.auth_error = None
+        st.rerun()
 
 # Alternatieve Supabase methode: token + type parameters
 if "token" in params and params.get("type") == "magiclink":
