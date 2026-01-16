@@ -79,36 +79,57 @@ if "access_token" in params:
     st.sidebar.write(f"Token lengte: {len(access_token)}")
     st.sidebar.write(f"Refresh token lengte: {len(refresh_token) if refresh_token else 0}")
 
-    # Don't use try-except - let errors show naturally
+    # Wrap in try-except but show error without reloading
     st.sidebar.write("Stap 1: Aanroepen set_session()...")
 
-    # Try the simple method - just use the tokens directly
-    from supabase.lib.client_options import ClientOptions
+    try:
+        # Supabase Python client expects a session dict, not separate tokens
+        st.sidebar.write("Methode: Session dict aanmaken...")
 
-    # Method 1: Direct session setting
-    st.sidebar.write("Methode: Direct session instellen...")
+        session_data = {
+            "access_token": access_token,
+            "refresh_token": refresh_token
+        }
 
-    # The correct way for Supabase Python v2
-    session_response = supabase.auth.set_session(access_token, refresh_token)
+        st.sidebar.write("Methode: set_session aanroepen...")
+        session_response = supabase.auth.set_session(session_data)
 
-    st.sidebar.success("✅ Set session aangeroepen!")
-    st.sidebar.write(f"Response: {session_response}")
+        st.sidebar.success("✅ Set session aangeroepen!")
+        st.sidebar.write(f"Response type: {type(session_response)}")
 
-    # Check if session is actually set
-    st.sidebar.write("Stap 2: Controleren sessie...")
-    current_session = supabase.auth.get_session()
-    st.sidebar.write(f"Current session: {current_session}")
+        # Check if session is actually set
+        st.sidebar.write("Stap 2: Controleren sessie...")
+        current_session = supabase.auth.get_session()
+        st.sidebar.write(f"Session exists: {current_session is not None}")
 
-    if current_session:
-        st.sidebar.success("✅ Sessie is ingesteld!")
-        st.session_state.login_attempt['step'] = 'success'
-        st.query_params.clear()
-        st.success("✅ Succesvol ingelogd!")
-        st.rerun()
-    else:
-        st.sidebar.error("❌ Sessie is NIET ingesteld")
-        st.session_state.login_attempt['step'] = 'session_not_set'
-        st.error("Login mislukt: Sessie kon niet worden ingesteld")
+        if current_session:
+            st.sidebar.success("✅ Sessie is ingesteld!")
+            st.session_state.login_attempt['step'] = 'success'
+            st.query_params.clear()
+            st.success("✅ Succesvol ingelogd!")
+            st.rerun()
+        else:
+            st.sidebar.error("❌ Sessie is NIET ingesteld")
+            st.session_state.login_attempt['step'] = 'session_not_set'
+            st.error("Login mislukt: Sessie kon niet worden ingesteld")
+            st.stop()
+
+    except Exception as e:
+        # Show full error and STOP - don't reload!
+        import traceback
+        st.error(f"❌ FOUT: {str(e)}")
+        st.sidebar.error("🚨 ERROR DETAILS:")
+        st.sidebar.error(f"Type: {type(e).__name__}")
+        st.sidebar.error(f"Bericht: {str(e)}")
+        st.sidebar.code(traceback.format_exc(), language="python")
+
+        # Show manual retry button
+        st.warning("Gebruik de knop hieronder om opnieuw te proberen:")
+        if st.button("🔄 Opnieuw proberen", type="primary", key="retry_btn"):
+            st.query_params.clear()
+            st.rerun()
+
+        # STOP HERE - don't auto reload
         st.stop()
 
 # Alternatieve Supabase methode: token + type parameters
