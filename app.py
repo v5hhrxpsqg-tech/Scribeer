@@ -99,19 +99,9 @@ if "access_token" in params and 'login_error_shown' not in st.session_state:
         # Try to get user with the access token
         st.sidebar.write("Stap 2: Gebruiker ophalen met token...")
 
-        # Create a new supabase client with the access token
-        supabase_authed = create_client(
-            SUPABASE_URL,
-            SUPABASE_KEY,
-            options={
-                "headers": {
-                    "Authorization": f"Bearer {access_token}"
-                }
-            }
-        )
-
-        # Try to get the user
-        user_response = supabase_authed.auth.get_user(access_token)
+        # Simply use the existing supabase client and pass the JWT
+        # The get_user method accepts the JWT directly
+        user_response = supabase.auth.get_user(access_token)
 
         if user_response and user_response.user:
             st.sidebar.success(f"✅ Gebruiker gevonden: {user_response.user.email}")
