@@ -167,9 +167,23 @@ if not is_logged_in:
     with login_col:
         google_auth = supabase.auth.sign_in_with_oauth({
             "provider": "google",
-            "options": {"redirect_to": CALLBACK_URL}
+            "options": {
+                "redirect_to": CALLBACK_URL,
+                "query_params": {
+                    "access_type": "offline",
+                    "prompt": "consent"
+                }
+            }
         })
-        st.link_button("🔑 Log in met Google", google_auth.url)
+        
+        # Forceer implicit flow door flowType param toe te voegen
+        auth_url = google_auth.url
+        if "?" in auth_url:
+            auth_url += "&flowType=implicit"
+        else:
+            auth_url += "?flowType=implicit"
+            
+        st.link_button("🔑 Log in met Google", auth_url)
 else:
     st.success(f"👋 Welkom! Je kunt nu bestanden tot 100MB volledig verwerken.")
 
@@ -229,9 +243,23 @@ if st.session_state.final_text:
         
         pay_auth = supabase.auth.sign_in_with_oauth({
             "provider": "google",
-            "options": {"redirect_to": CALLBACK_URL}
+            "options": {
+                "redirect_to": CALLBACK_URL,
+                "query_params": {
+                    "access_type": "offline",
+                    "prompt": "consent"
+                }
+            }
         })
-        st.link_button("🔐 Nu inloggen met Google", pay_auth.url)
+        
+        # Forceer implicit flow
+        pay_url = pay_auth.url
+        if "?" in pay_url:
+            pay_url += "&flowType=implicit"
+        else:
+            pay_url += "?flowType=implicit"
+            
+        st.link_button("🔐 Nu inloggen met Google", pay_url)
         
     else:
         st.subheader("Volledig Resultaat:")
