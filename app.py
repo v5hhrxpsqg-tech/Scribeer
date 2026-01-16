@@ -45,8 +45,24 @@ if params:
     st.sidebar.write("🔍 Debug - URL params:")
     st.sidebar.write(dict(params))
 
-# Show persistent auth error if any
-if st.session_state.auth_error:
+# If there's a login error, show it persistently at the TOP
+if st.session_state.get('login_error_shown'):
+    st.error("❌ Login fout opgetreden - Zie sidebar voor details")
+    with st.sidebar.expander("🚨 ERROR DETAILS", expanded=True):
+        if st.session_state.auth_error:
+            st.error(f"**Error:** {st.session_state.auth_error.get('repr', 'Unknown')}")
+            st.write(f"**Bericht:** {st.session_state.auth_error.get('message', 'Geen bericht')}")
+            st.code(st.session_state.auth_error.get('traceback', 'Geen traceback'), language="python")
+            if 'access_token_length' in st.session_state.auth_error:
+                st.write(f"**Token lengtes:** access={st.session_state.auth_error['access_token_length']}, refresh={st.session_state.auth_error['refresh_token_length']}")
+
+    if st.button("🔄 Probeer opnieuw", type="primary", key="retry_top"):
+        st.session_state.login_error_shown = False
+        st.session_state.auth_error = None
+        st.rerun()
+
+# Show persistent auth error if any (legacy - keeping for backwards compat)
+elif st.session_state.auth_error:
     st.error(f"❌ Login fout: {st.session_state.auth_error['message']}")
     with st.sidebar.expander("🐛 Volledige error details", expanded=True):
         st.error(f"Error: {st.session_state.auth_error['repr']}")
@@ -118,22 +134,6 @@ if "access_token" in params and 'login_error_shown' not in st.session_state:
             'refresh_token_length': len(refresh_token) if refresh_token else 0
         }
         st.query_params.clear()
-        st.rerun()
-
-# If there's a login error, show it persistently
-if st.session_state.get('login_error_shown'):
-    st.error("❌ Login fout opgetreden")
-    with st.sidebar.expander("🚨 ERROR DETAILS", expanded=True):
-        if st.session_state.auth_error:
-            st.error(f"**Error:** {st.session_state.auth_error.get('repr', 'Unknown')}")
-            st.write(f"**Bericht:** {st.session_state.auth_error.get('message', 'Geen bericht')}")
-            st.code(st.session_state.auth_error.get('traceback', 'Geen traceback'), language="python")
-            if 'access_token_length' in st.session_state.auth_error:
-                st.write(f"**Token lengtes:** access={st.session_state.auth_error['access_token_length']}, refresh={st.session_state.auth_error['refresh_token_length']}")
-
-    if st.button("🔄 Probeer opnieuw", type="primary"):
-        st.session_state.login_error_shown = False
-        st.session_state.auth_error = None
         st.rerun()
 
 # Alternatieve Supabase methode: token + type parameters
