@@ -38,6 +38,11 @@ if 'magic_link_sent' not in st.session_state:
 # =================================================================
 params = st.query_params
 
+# DEBUG: Laat zien wat er in de URL zit
+if params:
+    st.sidebar.write("🔍 Debug - URL params:")
+    st.sidebar.write(dict(params))
+
 # Check voor tokens in URL (van magic link)
 if "access_token" in params:
     try:
@@ -48,6 +53,11 @@ if "access_token" in params:
     except Exception as e:
         st.error(f"Login fout: {e}")
         st.query_params.clear()
+
+# Check voor error in URL
+if "error" in params:
+    st.error(f"Login fout: {params.get('error_description', 'Onbekende fout')}")
+    st.query_params.clear()
 
 # Check authenticatie status
 user = None
@@ -114,6 +124,18 @@ def process_audio_logic(audio_file, guest_mode):
 # =================================================================
 st.sidebar.header("⚙️ Instellingen")
 
+# DEBUG INFO
+with st.sidebar.expander("🔧 Debug Info"):
+    st.write(f"**Ingelogd:** {is_logged_in}")
+    if user:
+        st.write(f"**Email:** {user.email}")
+        st.write(f"**User ID:** {user.id}")
+    try:
+        session_check = supabase.auth.get_session()
+        st.write(f"**Sessie actief:** {'Ja' if session_check else 'Nee'}")
+    except:
+        st.write("**Sessie actief:** Nee")
+
 if is_logged_in:
     st.sidebar.success(f"✅ Ingelogd als: {user.email}")
     if st.sidebar.button("Uitloggen"):
@@ -121,6 +143,8 @@ if is_logged_in:
         st.session_state.final_text = None
         st.session_state.magic_link_sent = False
         st.rerun()
+else:
+    st.sidebar.info("Je bent niet ingelogd")
 
 chosen_lang = st.sidebar.selectbox(
     "Vertaal naar:", 
