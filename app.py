@@ -8,7 +8,7 @@ import os
 from supabase import create_client, Client
 
 # =================================================================
-# 1. INITIALISATIE & BEVEILIGING
+# 1. INITIALISATIE
 # =================================================================
 st.set_page_config(
     page_title="Scribeer.nl - Jouw AI Notulist",
@@ -28,48 +28,28 @@ if not SUPABASE_URL or not SUPABASE_KEY or not OPENAI_API_KEY:
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# BELANGRIJK: Pas aan naar jouw GitHub Pages URL!
-CALLBACK_URL = "https://v5hhrxpsqg-tech.github.io/Scribeer/callback.html"
-
 if 'final_text' not in st.session_state:
     st.session_state.final_text = None
-if 'auth_processing' not in st.session_state:
-    st.session_state.auth_processing = False
+if 'magic_link_sent' not in st.session_state:
+    st.session_state.magic_link_sent = False
 
 # =================================================================
-# 2. OAUTH CALLBACK AFHANDELING (GEFIXTE VERSIE)
+# 2. EMAIL MAGIC LINK AUTH (SIMPELE OPLOSSING!)
 # =================================================================
 params = st.query_params
 
-# CRUCIALE FIX: Check eerst of we al bezig zijn met auth processing
-if st.session_state.auth_processing:
-    st.info("⏳ Sessie wordt hersteld, even geduld...")
-    st.session_state.auth_processing = False
-    st.rerun()
-
-# Auth callback handling
+# Check voor tokens in URL (van magic link)
 if "access_token" in params:
     try:
-        st.session_state.auth_processing = True
         supabase.auth.set_session(params["access_token"], params.get("refresh_token", ""))
         st.query_params.clear()
+        st.success("✅ Succesvol ingelogd!")
         st.rerun()
     except Exception as e:
         st.error(f"Login fout: {e}")
         st.query_params.clear()
 
-elif "code" in params:
-    # PKCE flow kan niet werken in Streamlit omdat we geen code_verifier kunnen bewaren
-    # Redirect gebruiker terug om opnieuw te proberen met implicit flow
-    st.warning("⚠️ Login methode wordt aangepast, probeer opnieuw...")
-    st.query_params.clear()
-    st.rerun()
-
-elif "error" in params:
-    st.error(f"Login fout: {params.get('error_description', 'Onbekende fout')}")
-    st.query_params.clear()
-
-# Bepaal inlog status
+# Check authenticatie status
 user = None
 is_logged_in = False
 try:
@@ -82,7 +62,7 @@ except Exception:
     pass
 
 # =================================================================
-# 3. AUDIO VERWERKINGS ENGINE
+# 3. AUDIO VERWERKING
 # =================================================================
 def process_audio_logic(audio_file, guest_mode):
     """Verwerkt audio, hakt in stukken en stuurt naar Whisper."""
@@ -139,7 +119,7 @@ if is_logged_in:
     if st.sidebar.button("Uitloggen"):
         supabase.auth.sign_out()
         st.session_state.final_text = None
-        st.session_state.auth_processing = False
+        st.session_state.magic_link_sent = False
         st.rerun()
 
 chosen_lang = st.sidebar.selectbox(
@@ -160,35 +140,45 @@ Dit scheelt jou uren luister- en tikwerk, handig toch!
 
 st.divider()
 
+# =================================================================
+# 6. LOGIN SECTIE (EMAIL MAGIC LINK)
+# =================================================================
 if not is_logged_in:
-    info_col, login_col = st.columns([3, 1])
+    info_col, login_col = st.columns([2, 1])
+    
     with info_col:
         st.info("✨ **Gast-modus:** Gratis preview tot 10 minuten (max 25MB).")
+    
     with login_col:
-        google_auth = supabase.auth.sign_in_with_oauth({
-            "provider": "google",
-            "options": {
-                "redirect_to": CALLBACK_URL,
-                "query_params": {
-                    "access_type": "offline",
-                    "prompt": "consent"
-                }
-            }
-        })
-        
-        # Forceer implicit flow door flowType param toe te voegen
-        auth_url = google_auth.url
-        if "?" in auth_url:
-            auth_url += "&flowType=implicit"
+        if not st.session_state.magic_link_sent:
+            with st.form("email_login"):
+                email = st.text_input("📧 Email adres", placeholder="jouw@email.nl")
+                submit = st.form_submit_button("🔐 Log in")
+                
+                if submit and email:
+                    try:
+                        # Stuur magic link naar email
+                        supabase.auth.sign_in_with_otp({
+                            "email": email,
+                            "options": {
+                                "email_redirect_to": "https://scribeer.nl"
+                            }
+                        })
+                        st.session_state.magic_link_sent = True
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Fout: {e}")
         else:
-            auth_url += "?flowType=implicit"
-            
-        st.link_button("🔑 Log in met Google", auth_url)
+            st.success("📧 Check je email!")
+            st.caption("Klik op de link in je email om in te loggen.")
+            if st.button("Andere email gebruiken"):
+                st.session_state.magic_link_sent = False
+                st.rerun()
 else:
     st.success(f"👋 Welkom! Je kunt nu bestanden tot 100MB volledig verwerken.")
 
 # =================================================================
-# 6. BESTAND UPLOADEN & VERWERKEN
+# 7. BESTAND UPLOADEN & VERWERKEN
 # =================================================================
 audio_input = st.file_uploader("Upload audio (MP3, WAV, M4A)", type=["mp3", "wav", "m4a"])
 
@@ -197,7 +187,7 @@ if audio_input and st.session_state.final_text is None:
     
     if not is_logged_in and file_mb > 25:
         st.error(f"⚠️ Dit bestand ({file_mb:.1f}MB) is te groot voor gasten.")
-        st.warning("Log in met Google om bestanden tot 100MB te verwerken.")
+        st.warning("Log in om bestanden tot 100MB te verwerken.")
     else:
         if not is_logged_in and file_mb > 5:
             st.warning("⏱️ Preview: Je ontvangt als gast een transcriptie van de eerste 10 minuten.")
@@ -224,7 +214,7 @@ if audio_input and st.session_state.final_text is None:
                     st.rerun()
 
 # =================================================================
-# 7. RESULTAAT & DOWNLOADS
+# 8. RESULTAAT & DOWNLOADS
 # =================================================================
 if st.session_state.final_text:
     output_text = st.session_state.final_text
@@ -237,29 +227,11 @@ if st.session_state.final_text:
         st.markdown("""
             <div style="background-color:#f0f2f6; padding:20px; border-radius:10px; border:2px solid #ff4b4b; margin-top:10px;">
                 <h4 style="color:#ff4b4b; margin:0;">🔒 Transcriptie voltooid!</h4>
-                <p>Log in met Google om het volledige resultaat te downloaden.</p>
+                <p>Log in om het volledige resultaat te downloaden.</p>
             </div>
         """, unsafe_allow_html=True)
         
-        pay_auth = supabase.auth.sign_in_with_oauth({
-            "provider": "google",
-            "options": {
-                "redirect_to": CALLBACK_URL,
-                "query_params": {
-                    "access_type": "offline",
-                    "prompt": "consent"
-                }
-            }
-        })
-        
-        # Forceer implicit flow
-        pay_url = pay_auth.url
-        if "?" in pay_url:
-            pay_url += "&flowType=implicit"
-        else:
-            pay_url += "?flowType=implicit"
-            
-        st.link_button("🔐 Nu inloggen met Google", pay_url)
+        st.info("👆 Vul je email in bovenaan om in te loggen")
         
     else:
         st.subheader("Volledig Resultaat:")
