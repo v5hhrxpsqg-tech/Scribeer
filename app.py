@@ -52,22 +52,30 @@ if "error" in params:
 
 # Check voor tokens in URL (van magic link)
 if "access_token" in params:
+    access_token = params["access_token"]
+    refresh_token = params.get("refresh_token", "")
+
+    st.sidebar.info(f"🔑 Token ontvangen, probeer in te loggen...")
+    st.sidebar.write(f"Token lengte: {len(access_token)}")
+
     try:
-        access_token = params["access_token"]
-        refresh_token = params.get("refresh_token", "")
-
-        st.sidebar.info(f"🔑 Token ontvangen, probeer in te loggen...")
-
         # Verifieer de sessie met de tokens
-        response = supabase.auth.set_session(access_token, refresh_token)
+        auth_response = supabase.auth.set_session(access_token, refresh_token)
 
+        st.sidebar.success("✅ Set session succesvol!")
+        st.sidebar.write(f"Response: {auth_response}")
+
+        # Clear URL parameters
         st.query_params.clear()
         st.success("✅ Succesvol ingelogd!")
         st.rerun()
     except Exception as e:
         st.error(f"❌ Login fout: {str(e)}")
-        st.sidebar.error(f"Token error: {str(e)}")
-        st.query_params.clear()
+        st.sidebar.error(f"Volledige error: {repr(e)}")
+        import traceback
+        st.sidebar.code(traceback.format_exc())
+        # Don't clear params so we can see the error
+        # st.query_params.clear()
 
 # Alternatieve Supabase methode: token + type parameters
 if "token" in params and params.get("type") == "magiclink":
