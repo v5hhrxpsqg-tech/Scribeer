@@ -79,21 +79,21 @@
             console.log('Type:', type);
             
             if (error) {
-                window.location.href = `https://scribeer.nl?error=${error}`;
+                window.location.href = `https://www.scribeer.nl?error=${error}`;
             } else if (accessToken) {
                 // Tokens gevonden in hash
-                let url = `https://scribeer.nl?access_token=${accessToken}`;
+                let url = `https://www.scribeer.nl?access_token=${accessToken}`;
                 if (refreshToken) url += `&refresh_token=${refreshToken}`;
                 window.location.href = url;
             } else if (token && type === 'magiclink') {
                 // Magic link token
-                window.location.href = `https://scribeer.nl?token=${token}&type=magiclink`;
+                window.location.href = `https://www.scribeer.nl?token=${token}&type=magiclink`;
             } else if (tokenHash) {
                 // Token hash (oude Supabase methode)
-                window.location.href = `https://scribeer.nl?token_hash=${tokenHash}&type=${type}`;
+                window.location.href = `https://www.scribeer.nl?token_hash=${tokenHash}&type=${type}`;
             } else {
                 // Niets gevonden, stuur terug
-                window.location.href = 'https://scribeer.nl?error=no_tokens';
+                window.location.href = 'https://www.scribeer.nl?error=no_tokens';
             }
         }
 

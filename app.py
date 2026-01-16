@@ -215,7 +215,7 @@ if not is_logged_in:
                         supabase.auth.sign_in_with_otp({
                             "email": email,
                             "options": {
-                                "email_redirect_to": "https://scribeer.nl"
+                                "email_redirect_to": "https://v5hhrxpsqg-tech.github.io/Scribeer/callback.html"
                             }
                         })
                         st.session_state.magic_link_sent = True
