@@ -32,6 +32,8 @@ if 'final_text' not in st.session_state:
     st.session_state.final_text = None
 if 'magic_link_sent' not in st.session_state:
     st.session_state.magic_link_sent = False
+if 'auth_error' not in st.session_state:
+    st.session_state.auth_error = None
 
 # =================================================================
 # 2. EMAIL MAGIC LINK AUTH (SIMPELE OPLOSSING!)
@@ -42,6 +44,16 @@ params = st.query_params
 if params:
     st.sidebar.write("🔍 Debug - URL params:")
     st.sidebar.write(dict(params))
+
+# Show persistent auth error if any
+if st.session_state.auth_error:
+    st.error(f"❌ Login fout: {st.session_state.auth_error['message']}")
+    with st.sidebar.expander("🐛 Volledige error details", expanded=True):
+        st.error(f"Error: {st.session_state.auth_error['repr']}")
+        st.code(st.session_state.auth_error['traceback'])
+    if st.button("Error wegwerken en opnieuw proberen"):
+        st.session_state.auth_error = None
+        st.rerun()
 
 # Check voor error in URL
 if "error" in params:
@@ -63,19 +75,26 @@ if "access_token" in params:
         auth_response = supabase.auth.set_session(access_token, refresh_token)
 
         st.sidebar.success("✅ Set session succesvol!")
-        st.sidebar.write(f"Response: {auth_response}")
+        st.sidebar.write(f"Response type: {type(auth_response)}")
 
-        # Clear URL parameters
+        # Clear URL parameters and error
+        st.session_state.auth_error = None
         st.query_params.clear()
         st.success("✅ Succesvol ingelogd!")
         st.rerun()
     except Exception as e:
-        st.error(f"❌ Login fout: {str(e)}")
-        st.sidebar.error(f"Volledige error: {repr(e)}")
+        # Save error to session state so it persists after rerun
         import traceback
-        st.sidebar.code(traceback.format_exc())
-        # Don't clear params so we can see the error
-        # st.query_params.clear()
+        error_details = {
+            'message': str(e),
+            'repr': repr(e),
+            'traceback': traceback.format_exc()
+        }
+        st.session_state.auth_error = error_details
+
+        # Clear the URL params to trigger a rerun without them
+        st.query_params.clear()
+        st.rerun()
 
 # Alternatieve Supabase methode: token + type parameters
 if "token" in params and params.get("type") == "magiclink":
