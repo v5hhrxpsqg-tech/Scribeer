@@ -59,17 +59,11 @@ if "access_token" in params:
         st.query_params.clear()
 
 elif "code" in params:
-    try:
-        st.session_state.auth_processing = True
-        code = params["code"]
-        # Clear params EERST om loops te voorkomen
-        st.query_params.clear()
-        # Dan pas de sessie maken
-        supabase.auth.exchange_code_for_session({"auth_code": code})
-        st.rerun()
-    except Exception as e:
-        st.error(f"Code exchange fout: {e}")
-        st.session_state.auth_processing = False
+    # PKCE flow kan niet werken in Streamlit omdat we geen code_verifier kunnen bewaren
+    # Redirect gebruiker terug om opnieuw te proberen met implicit flow
+    st.warning("⚠️ Login methode wordt aangepast, probeer opnieuw...")
+    st.query_params.clear()
+    st.rerun()
 
 elif "error" in params:
     st.error(f"Login fout: {params.get('error_description', 'Onbekende fout')}")
