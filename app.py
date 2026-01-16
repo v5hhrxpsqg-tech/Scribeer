@@ -25,35 +25,68 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 if 'final_text' not in st.session_state:
     st.session_state.final_text = None
 
-# ---- 2. OAUTH CALLBACK AFHANDELING ----
-# Check of er OAuth tokens in de URL zitten
+# ---- 2. OAUTH URL GENEREREN EN TONEN ----
+def get_google_oauth_url():
+    """Genereer Google OAuth URL en return deze"""
+    try:
+        response = supabase.auth.sign_in_with_oauth({
+            "provider": "google",
+            "options": {
+                "redirect_to": "https://scribeer.nl"
+            }
+        })
+        
+        # Check wat we krijgen
+        if response:
+            if hasattr(response, 'url'):
+                return response.url, None
+            elif hasattr(response, 'provider_token'):
+                return response.provider_token, None
+            else:
+                return None, f"Unexpected response type: {type(response)}"
+        return None, "No response from Supabase"
+        
+    except Exception as e:
+        return None, str(e)
+
+# ---- 3. OAUTH CALLBACK AFHANDELING ----
 query_params = st.query_params
 
+# Check verschillende OAuth return methodes
 if "access_token" in query_params:
     try:
-        # Herstel de sessie met de tokens uit de URL
         access_token = query_params["access_token"]
         refresh_token = query_params.get("refresh_token", "")
         
-        # Set de sessie in Supabase
         supabase.auth.set_session(access_token, refresh_token)
-        
-        # Verwijder de tokens uit de URL
         st.query_params.clear()
         st.rerun()
     except Exception as e:
-        st.error(f"Login fout: {e}")
+        st.error(f"Login fout (access_token): {e}")
 
-# ---- 3. AUTHENTICATIE CHECK ----
+elif "code" in query_params:
+    try:
+        code = query_params["code"]
+        supabase.auth.exchange_code_for_session({"auth_code": code})
+        st.query_params.clear()
+        st.rerun()
+    except Exception as e:
+        st.error(f"Login fout (code): {e}")
+
+# ---- 4. AUTHENTICATIE CHECK ----
+user = None
+ingelogd = False
+
 try:
-    user_response = supabase.auth.get_user()
-    user = user_response.user if user_response else None
-    ingelogd = True if user else False
+    session = supabase.auth.get_session()
+    if session:
+        user_response = supabase.auth.get_user()
+        user = user_response.user if user_response else None
+        ingelogd = bool(user)
 except Exception:
-    user = None
-    ingelogd = False
+    pass
 
-# ---- 4. ZIJBALK ----
+# ---- 5. ZIJBALK ----
 st.sidebar.header("⚙️ Instellingen")
 target_lang = st.sidebar.selectbox("Vertaal naar:", ["Geen (originele taal)", "Nederlands", "Engels", "Duits", "Frans", "Spaans"])
 
@@ -63,8 +96,20 @@ if ingelogd:
         supabase.auth.sign_out()
         st.session_state.final_text = None
         st.rerun()
+else:
+    # DEBUG: Laat de OAuth URL zien
+    st.sidebar.subheader("🔍 Debug Login")
+    oauth_url, error = get_google_oauth_url()
+    
+    if error:
+        st.sidebar.error(f"❌ OAuth Error: {error}")
+    elif oauth_url:
+        st.sidebar.success("✅ OAuth URL gegenereerd")
+        st.sidebar.code(oauth_url[:100] + "...", language=None)
+    else:
+        st.sidebar.warning("⚠️ Geen OAuth URL ontvangen")
 
-# ---- 5. FUNCTIES ----
+# ---- 6. FUNCTIES ----
 def transcribe_large_audio(file, is_guest):
     file.seek(0, os.SEEK_END)
     file_size = file.tell() / (1024 * 1024)
@@ -92,10 +137,9 @@ def transcribe_large_audio(file, is_guest):
             os.remove(chunk_path)
         return " ".join(chunks), None
 
-# ---- 6. HOOFDSCHERM ----
+# ---- 7. HOOFDSCHERM ----
 st.title("Scribeer 🎙️")
 
-# Welkomsttekst
 st.markdown("""
 **Welkom bij Scribeer!** Met deze AI-tool kan jij je audiobestanden uploaden en automatisch laten transcriberen.
 De tool herkent zelf of er meerdere sprekers in het audiobestand voorkomen en maakt hier een automatische scheiding in.
@@ -108,19 +152,24 @@ if not ingelogd:
     col_info, col_login = st.columns([3, 1])
     with col_info:
         st.info("✨ **Gast-modus:** Gratis preview tot 10 minuten (max 25MB).")
+    
     with col_login:
         # Genereer OAuth URL
-        auth_response = supabase.auth.sign_in_with_oauth({
-            "provider": "google",
-            "options": {
-                "redirect_to": "https://scribeer.nl"
-            }
-        })
+        oauth_url, error = get_google_oauth_url()
         
-        if auth_response and hasattr(auth_response, 'url'):
-            st.link_button("🔐 Log in met Google", auth_response.url)
+        if error:
+            st.error("⚠️ OAuth configuratie probleem")
+            with st.expander("Zie details"):
+                st.write(error)
+                st.write("**Controleer:**")
+                st.write("1. Supabase → Authentication → Providers → Google enabled?")
+                st.write("2. Supabase → Authentication → URL Configuration → Redirect URL ingesteld?")
+        elif oauth_url:
+            # Gebruik markdown link ipv st.link_button (soms werkt dit beter)
+            st.markdown(f'<a href="{oauth_url}" target="_self" style="display: inline-block; padding: 0.5rem 1rem; background-color: #FF4B4B; color: white; text-decoration: none; border-radius: 0.5rem; font-weight: 600;">🔐 Log in met Google</a>', unsafe_allow_html=True)
         else:
-            st.error("OAuth configuratie fout")
+            st.error("⚠️ Kan OAuth URL niet genereren")
+
 else:
     st.success(f"👋 Welkom! Je kunt nu bestanden tot 100MB volledig verwerken.")
 
@@ -173,11 +222,9 @@ if st.session_state.final_text:
         </div>
         """, unsafe_allow_html=True)
         
-        paywall_auth = supabase.auth.sign_in_with_oauth({
-            "provider": "google",
-            "options": {"redirect_to": "https://scribeer.nl"}
-        })
-        st.link_button("🔐 Nu inloggen met Google", paywall_auth.url)
+        oauth_url, _ = get_google_oauth_url()
+        if oauth_url:
+            st.markdown(f'<a href="{oauth_url}" target="_self" style="display: inline-block; padding: 0.5rem 1rem; background-color: #FF4B4B; color: white; text-decoration: none; border-radius: 0.5rem; font-weight: 600;">🔐 Nu inloggen met Google</a>', unsafe_allow_html=True)
     else:
         st.subheader("Volledig Resultaat:")
         st.text_area("Transcriptie:", final_text, height=400)
