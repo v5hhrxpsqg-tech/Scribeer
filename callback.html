@@ -88,7 +88,18 @@
                 if (errorCode) errorUrl += `&error_code=${errorCode}`;
                 window.location.href = errorUrl;
             } else if (accessToken) {
-                // Tokens gevonden in hash
+                // Sla tokens op in localStorage voor persistente login
+                try {
+                    localStorage.setItem('scribeer_access_token', accessToken);
+                    if (refreshToken) {
+                        localStorage.setItem('scribeer_refresh_token', refreshToken);
+                    }
+                    console.log('Tokens opgeslagen in localStorage');
+                } catch (e) {
+                    console.error('Kon tokens niet opslaan:', e);
+                }
+
+                // Stuur door met tokens in URL
                 let url = `https://www.scribeer.nl?access_token=${accessToken}`;
                 if (refreshToken) url += `&refresh_token=${refreshToken}`;
                 window.location.href = url;

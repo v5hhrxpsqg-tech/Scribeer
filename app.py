@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 from openai import OpenAI
 from docx import Document
 from fpdf import FPDF
@@ -39,12 +40,6 @@ if 'magic_link_sent' not in st.session_state:
 # =================================================================
 params = st.query_params
 
-# Debug: toon URL params als er wat is
-if params:
-    with st.sidebar.expander("🔍 URL Debug", expanded=False):
-        st.write("URL parameters ontvangen:")
-        st.write(dict(params))
-
 # Check voor error in URL
 if "error" in params:
     error_msg = params.get("error_description", params.get("error", "Onbekende fout"))
@@ -63,6 +58,16 @@ if "access_token" in params:
             st.session_state.user = user_response.user
             st.session_state.authenticated = True
             st.session_state.access_token = access_token
+            st.session_state.refresh_token = refresh_token
+
+            # Sla token op in localStorage via JavaScript
+            components.html(f"""
+                <script>
+                    localStorage.setItem('scribeer_access_token', '{access_token}');
+                    localStorage.setItem('scribeer_refresh_token', '{refresh_token}');
+                </script>
+            """, height=0)
+
             st.query_params.clear()
             st.success("✅ Succesvol ingelogd!")
             st.rerun()
@@ -80,9 +85,24 @@ if "access_token" in params:
 user = None
 is_logged_in = False
 
+# Eerst: check session_state
 if st.session_state.get('authenticated') and st.session_state.get('user'):
     user = st.session_state.user
     is_logged_in = True
+else:
+    # Probeer token uit localStorage te halen via query param trick
+    # We injecteren JS dat de token naar een query param schrijft als die bestaat
+    if 'checked_local_storage' not in st.session_state:
+        components.html("""
+            <script>
+                const token = localStorage.getItem('scribeer_access_token');
+                if (token && !window.location.search.includes('access_token')) {
+                    const refresh = localStorage.getItem('scribeer_refresh_token') || '';
+                    window.location.href = window.location.pathname + '?access_token=' + token + '&refresh_token=' + refresh;
+                }
+            </script>
+        """, height=0)
+        st.session_state.checked_local_storage = True
 
 # =================================================================
 # 3. AUDIO VERWERKING
@@ -228,6 +248,16 @@ if is_logged_in:
             del st.session_state.access_token
         if 'refresh_token' in st.session_state:
             del st.session_state.refresh_token
+        if 'checked_local_storage' in st.session_state:
+            del st.session_state.checked_local_storage
+
+        # Verwijder localStorage tokens via JavaScript
+        components.html("""
+            <script>
+                localStorage.removeItem('scribeer_access_token');
+                localStorage.removeItem('scribeer_refresh_token');
+            </script>
+        """, height=0)
 
         st.session_state.final_text = None
         st.session_state.magic_link_sent = False
