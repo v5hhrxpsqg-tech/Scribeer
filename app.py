@@ -7,7 +7,7 @@ from pydub import AudioSegment
 import os
 import time
 from supabase import create_client, Client
-import extra_streamlit_components as stx
+from streamlit_local_storage import LocalStorage
 
 # =================================================================
 # 1. INITIALISATIE
@@ -18,12 +18,8 @@ st.set_page_config(
     layout="wide"
 )
 
-# Cookie manager voor persistente login
-@st.cache_resource
-def get_cookie_manager():
-    return stx.CookieManager()
-
-cookie_manager = get_cookie_manager()
+# Local storage voor persistente login
+local_storage = LocalStorage()
 
 # Sleutels ophalen
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
@@ -62,11 +58,11 @@ if "access_token" in params:
         user_response = supabase.auth.get_user(access_token)
 
         if user_response and user_response.user:
-            # Sla tokens op in cookies (7 dagen geldig)
-            cookie_manager.set("access_token", access_token, max_age=7*24*60*60)
-            cookie_manager.set("refresh_token", refresh_token, max_age=7*24*60*60)
-            cookie_manager.set("user_email", user_response.user.email, max_age=7*24*60*60)
-            cookie_manager.set("user_id", user_response.user.id, max_age=7*24*60*60)
+            # Sla tokens op in localStorage
+            local_storage.setItem("scribeer_access_token", access_token)
+            local_storage.setItem("scribeer_refresh_token", refresh_token)
+            local_storage.setItem("scribeer_user_email", user_response.user.email)
+            local_storage.setItem("scribeer_user_id", user_response.user.id)
 
             st.session_state.user = user_response.user
             st.session_state.authenticated = True
@@ -93,10 +89,9 @@ if st.session_state.get('authenticated') and st.session_state.get('user'):
     user = st.session_state.user
     is_logged_in = True
 else:
-    # Fallback: check cookies voor persistente login
-    saved_token = cookie_manager.get("access_token")
-    saved_email = cookie_manager.get("user_email")
-    saved_user_id = cookie_manager.get("user_id")
+    # Fallback: check localStorage voor persistente login
+    saved_token = local_storage.getItem("scribeer_access_token")
+    saved_email = local_storage.getItem("scribeer_user_email")
 
     if saved_token and saved_email:
         try:
@@ -109,19 +104,19 @@ else:
                 user = user_response.user
                 is_logged_in = True
             else:
-                # Token ongeldig, verwijder cookies
-                cookie_manager.delete("access_token")
-                cookie_manager.delete("refresh_token")
-                cookie_manager.delete("user_email")
-                cookie_manager.delete("user_id")
+                # Token ongeldig, verwijder localStorage
+                local_storage.deleteItem("scribeer_access_token")
+                local_storage.deleteItem("scribeer_refresh_token")
+                local_storage.deleteItem("scribeer_user_email")
+                local_storage.deleteItem("scribeer_user_id")
         except Exception:
             # Token verlopen of ongeldig
-            cookie_manager.delete("access_token")
-            cookie_manager.delete("refresh_token")
-            cookie_manager.delete("user_email")
-            cookie_manager.delete("user_id")
+            local_storage.deleteItem("scribeer_access_token")
+            local_storage.deleteItem("scribeer_refresh_token")
+            local_storage.deleteItem("scribeer_user_email")
+            local_storage.deleteItem("scribeer_user_id")
 
-# Backwards compat: als session_state user heeft maar geen object
+# Backwards compat
 if st.session_state.get('authenticated') and st.session_state.get('user'):
     user = st.session_state.user
     is_logged_in = True
@@ -271,11 +266,11 @@ if is_logged_in:
         if 'refresh_token' in st.session_state:
             del st.session_state.refresh_token
 
-        # Verwijder cookies
-        cookie_manager.delete("access_token")
-        cookie_manager.delete("refresh_token")
-        cookie_manager.delete("user_email")
-        cookie_manager.delete("user_id")
+        # Verwijder localStorage
+        local_storage.deleteItem("scribeer_access_token")
+        local_storage.deleteItem("scribeer_refresh_token")
+        local_storage.deleteItem("scribeer_user_email")
+        local_storage.deleteItem("scribeer_user_id")
 
         st.session_state.final_text = None
         st.session_state.magic_link_sent = False

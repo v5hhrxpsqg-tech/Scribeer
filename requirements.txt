@@ -4,4 +4,4 @@ python-docx
 fpdf
 pydub
 supabase
-extra-streamlit-components
+streamlit-local-storage
