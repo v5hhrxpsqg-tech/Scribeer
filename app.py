@@ -32,148 +32,52 @@ if 'final_text' not in st.session_state:
     st.session_state.final_text = None
 if 'magic_link_sent' not in st.session_state:
     st.session_state.magic_link_sent = False
-if 'auth_error' not in st.session_state:
-    st.session_state.auth_error = None
 
 # =================================================================
-# 2. EMAIL MAGIC LINK AUTH (SIMPELE OPLOSSING!)
+# 2. EMAIL MAGIC LINK AUTH
 # =================================================================
 params = st.query_params
-
-# DEBUG: Laat zien wat er in de URL zit
-if params:
-    st.sidebar.write("🔍 Debug - URL params:")
-    st.sidebar.write(dict(params))
-
-# If there's a login error, show it persistently at the TOP
-if st.session_state.get('login_error_shown'):
-    st.error("❌ Login fout opgetreden - Zie sidebar voor details")
-    with st.sidebar.expander("🚨 ERROR DETAILS", expanded=True):
-        if st.session_state.auth_error:
-            st.error(f"**Error:** {st.session_state.auth_error.get('repr', 'Unknown')}")
-            st.write(f"**Bericht:** {st.session_state.auth_error.get('message', 'Geen bericht')}")
-            st.code(st.session_state.auth_error.get('traceback', 'Geen traceback'), language="python")
-            if 'access_token_length' in st.session_state.auth_error:
-                st.write(f"**Token lengtes:** access={st.session_state.auth_error['access_token_length']}, refresh={st.session_state.auth_error['refresh_token_length']}")
-
-    if st.button("🔄 Probeer opnieuw", type="primary", key="retry_top"):
-        st.session_state.login_error_shown = False
-        st.session_state.auth_error = None
-        st.rerun()
-
-# Show persistent auth error if any (legacy - keeping for backwards compat)
-elif st.session_state.auth_error:
-    st.error(f"❌ Login fout: {st.session_state.auth_error['message']}")
-    with st.sidebar.expander("🐛 Volledige error details", expanded=True):
-        st.error(f"Error: {st.session_state.auth_error['repr']}")
-        st.code(st.session_state.auth_error['traceback'])
-    if st.button("Error wegwerken en opnieuw proberen"):
-        st.session_state.auth_error = None
-        st.rerun()
 
 # Check voor error in URL
 if "error" in params:
     error_msg = params.get("error_description", params.get("error", "Onbekende fout"))
     st.error(f"❌ Login fout: {error_msg}")
-    st.sidebar.error(f"Error details: {error_msg}")
     st.query_params.clear()
 
-# Check voor tokens in URL (van magic link)
-if "access_token" in params and 'login_error_shown' not in st.session_state:
+# Check voor tokens in URL (van magic link callback)
+if "access_token" in params:
     access_token = params["access_token"]
     refresh_token = params.get("refresh_token", "")
 
-    st.sidebar.info(f"🔑 Token ontvangen, probeer in te loggen...")
-    st.sidebar.write(f"Token lengte: {len(access_token)}")
-    st.sidebar.write(f"Refresh token lengte: {len(refresh_token) if refresh_token else 0}")
-    st.sidebar.write("Stap 1: Aanroepen set_session()...")
-
     try:
-        # Alternative approach: Store tokens in session_state and use them directly
-        st.sidebar.write("Methode: Tokens opslaan in session_state...")
-
-        # Save tokens to session state for persistent auth
         st.session_state.access_token = access_token
         st.session_state.refresh_token = refresh_token
 
-        # Try to get user with the access token
-        st.sidebar.write("Stap 2: Gebruiker ophalen met token...")
-
-        # Simply use the existing supabase client and pass the JWT
-        # The get_user method accepts the JWT directly
         user_response = supabase.auth.get_user(access_token)
 
         if user_response and user_response.user:
-            st.sidebar.success(f"✅ Gebruiker gevonden: {user_response.user.email}")
             st.session_state.user = user_response.user
             st.session_state.authenticated = True
             st.query_params.clear()
             st.success("✅ Succesvol ingelogd!")
             st.rerun()
         else:
-            st.sidebar.error("❌ Geen gebruiker gevonden")
-            # Save error and clear params
-            st.session_state.login_error_shown = True
-            st.session_state.auth_error = {
-                'message': 'Gebruiker kon niet worden opgehaald',
-                'repr': 'UserNotFound',
-                'traceback': 'get_user() retourneerde geen gebruiker'
-            }
+            st.error("❌ Login mislukt. Probeer opnieuw.")
             st.query_params.clear()
             st.rerun()
 
     except Exception as e:
-        # Save error to session state and clear URL params
-        import traceback
-        st.session_state.login_error_shown = True
-        st.session_state.auth_error = {
-            'message': str(e),
-            'repr': repr(e),
-            'traceback': traceback.format_exc(),
-            'access_token_length': len(access_token),
-            'refresh_token_length': len(refresh_token) if refresh_token else 0
-        }
+        st.error(f"❌ Login fout: {str(e)}")
         st.query_params.clear()
         st.rerun()
-
-# Alternatieve Supabase methode: token + type parameters
-if "token" in params and params.get("type") == "magiclink":
-    try:
-        token = params["token"]
-        st.sidebar.info(f"🔑 Magic link token ontvangen...")
-
-        # Verifieer de OTP token
-        response = supabase.auth.verify_otp({
-            "token": token,
-            "type": "magiclink"
-        })
-
-        st.query_params.clear()
-        st.success("✅ Succesvol ingelogd!")
-        st.rerun()
-    except Exception as e:
-        st.error(f"❌ Token verificatie fout: {str(e)}")
-        st.sidebar.error(f"OTP error: {str(e)}")
-        st.query_params.clear()
 
 # Check authenticatie status
 user = None
 is_logged_in = False
 
-# Check if user is authenticated via our session_state method
 if st.session_state.get('authenticated') and st.session_state.get('user'):
     user = st.session_state.user
     is_logged_in = True
-else:
-    # Fallback: try the old method
-    try:
-        session = supabase.auth.get_session()
-        if session:
-            u_res = supabase.auth.get_user()
-            user = u_res.user if u_res else None
-            is_logged_in = bool(user)
-    except Exception:
-        pass
 
 # =================================================================
 # 3. AUDIO VERWERKING
@@ -183,8 +87,8 @@ def process_audio_logic(audio_file, guest_mode):
     audio_file.seek(0, os.SEEK_END)
     file_mb = audio_file.tell() / (1024 * 1024)
     audio_file.seek(0)
-    
-    limit_mb = 25 if guest_mode else 100
+
+    limit_mb = 25 if guest_mode else 200
     if file_mb > limit_mb:
         return "ERROR_TOO_LARGE"
 
@@ -243,7 +147,6 @@ with st.sidebar.expander("🔧 Debug Info"):
 if is_logged_in:
     st.sidebar.success(f"✅ Ingelogd als: {user.email}")
     if st.sidebar.button("Uitloggen"):
-        # Clear our custom auth
         if 'authenticated' in st.session_state:
             del st.session_state.authenticated
         if 'user' in st.session_state:
@@ -252,12 +155,6 @@ if is_logged_in:
             del st.session_state.access_token
         if 'refresh_token' in st.session_state:
             del st.session_state.refresh_token
-
-        # Also try the old method
-        try:
-            supabase.auth.sign_out()
-        except:
-            pass
 
         st.session_state.final_text = None
         st.session_state.magic_link_sent = False
@@ -318,7 +215,7 @@ if not is_logged_in:
                 st.session_state.magic_link_sent = False
                 st.rerun()
 else:
-    st.success(f"👋 Welkom! Je kunt nu bestanden tot 100MB volledig verwerken.")
+    st.success(f"👋 Welkom! Je kunt nu bestanden tot 200MB volledig verwerken.")
 
 # =================================================================
 # 7. BESTAND UPLOADEN & VERWERKEN
@@ -330,7 +227,7 @@ if audio_input and st.session_state.final_text is None:
     
     if not is_logged_in and file_mb > 25:
         st.error(f"⚠️ Dit bestand ({file_mb:.1f}MB) is te groot voor gasten.")
-        st.warning("Log in om bestanden tot 100MB te verwerken.")
+        st.warning("Log in om bestanden tot 200MB te verwerken.")
     else:
         if not is_logged_in and file_mb > 5:
             st.warning("⏱️ Preview: Je ontvangt als gast een transcriptie van de eerste 10 minuten.")
