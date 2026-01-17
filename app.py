@@ -5,6 +5,7 @@ from fpdf import FPDF
 from io import BytesIO
 from pydub import AudioSegment
 import os
+import time
 from supabase import create_client, Client
 
 # =================================================================
@@ -82,6 +83,24 @@ if st.session_state.get('authenticated') and st.session_state.get('user'):
 # =================================================================
 # 3. AUDIO VERWERKING
 # =================================================================
+def transcribe_chunk_with_retry(chunk_path, max_retries=3):
+    """Transcribeert een audio chunk met retry logica."""
+    for attempt in range(max_retries):
+        try:
+            with open(chunk_path, "rb") as f:
+                response = client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=f
+                )
+                return response.text
+        except Exception as e:
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s, 4s
+                continue
+            else:
+                raise e
+    return None
+
 def process_audio_logic(audio_file, guest_mode):
     """Verwerkt audio, hakt in stukken en stuurt naar Whisper."""
     audio_file.seek(0, os.SEEK_END)
@@ -92,39 +111,76 @@ def process_audio_logic(audio_file, guest_mode):
     if file_mb > limit_mb:
         return "ERROR_TOO_LARGE"
 
-    with st.spinner("Audio laden..."):
-        full_audio = AudioSegment.from_file(audio_file)
-    
+    # Initialiseer progress tracking in session_state
+    if 'transcription_progress' not in st.session_state:
+        st.session_state.transcription_progress = []
+
+    try:
+        with st.spinner("Audio laden..."):
+            full_audio = AudioSegment.from_file(audio_file)
+    except Exception as e:
+        st.error(f"❌ Kon audio niet laden: {str(e)}")
+        return "ERROR_LOAD_FAILED"
+
     if guest_mode and len(full_audio) > 10 * 60 * 1000:
         full_audio = full_audio[:10 * 60 * 1000]
 
     ten_minutes = 10 * 60 * 1000
-    all_transcripts = []
     total_parts = (len(full_audio) // ten_minutes) + 1
-    
-    p_bar = st.progress(0)
-    status_indicator = st.empty()
 
-    for i in range(0, len(full_audio), ten_minutes):
+    # Bereken geschatte tijd
+    audio_duration_min = len(full_audio) / 60000
+    st.info(f"📊 Audio duur: {audio_duration_min:.1f} minuten ({total_parts} {'deel' if total_parts == 1 else 'delen'})")
+
+    p_bar = st.progress(0)
+    status_container = st.empty()
+    error_container = st.empty()
+
+    all_transcripts = st.session_state.transcription_progress.copy()
+    start_index = len(all_transcripts) * ten_minutes
+
+    for i in range(start_index, len(full_audio), ten_minutes):
         current_part = (i // ten_minutes) + 1
-        status_indicator.text(f"🎧 Verwerken van deel {current_part} van {total_parts}...")
-        
+
+        with status_container.container():
+            st.write(f"🎧 **Deel {current_part} van {total_parts}** wordt verwerkt...")
+            st.caption("Dit kan even duren. Sluit dit venster niet.")
+
         chunk = full_audio[i:i+ten_minutes]
         chunk_name = f"temp_chunk_{i}.mp3"
-        chunk.export(chunk_name, format="mp3")
-        
-        with open(chunk_name, "rb") as f:
-            response = client.audio.transcriptions.create(
-                model="whisper-1", 
-                file=f
-            )
-            all_transcripts.append(response.text)
-        
-        os.remove(chunk_name)
+
+        try:
+            chunk.export(chunk_name, format="mp3")
+
+            transcript = transcribe_chunk_with_retry(chunk_name)
+
+            if transcript:
+                all_transcripts.append(transcript)
+                st.session_state.transcription_progress = all_transcripts.copy()
+
+            if os.path.exists(chunk_name):
+                os.remove(chunk_name)
+
+        except Exception as e:
+            if os.path.exists(chunk_name):
+                os.remove(chunk_name)
+
+            error_container.error(f"❌ Fout bij deel {current_part}: {str(e)}")
+
+            if all_transcripts:
+                st.warning(f"⚠️ {len(all_transcripts)} van {total_parts} delen zijn wel verwerkt.")
+                st.session_state.transcription_progress = []
+                return " ".join(all_transcripts)
+            else:
+                st.session_state.transcription_progress = []
+                return "ERROR_TRANSCRIPTION_FAILED"
+
         p_bar.progress(current_part / total_parts)
-    
+
     p_bar.empty()
-    status_indicator.empty()
+    status_container.empty()
+    st.session_state.transcription_progress = []
+
     return " ".join(all_transcripts)
 
 # =================================================================
@@ -234,9 +290,13 @@ if audio_input and st.session_state.final_text is None:
         
         if st.button("🚀 Start Verwerking"):
             raw_output = process_audio_logic(audio_input, not is_logged_in)
-            
+
             if raw_output == "ERROR_TOO_LARGE":
                 st.error("⚠️ Bestand te groot.")
+            elif raw_output == "ERROR_LOAD_FAILED":
+                st.error("⚠️ Kon het audiobestand niet laden. Probeer een ander formaat.")
+            elif raw_output == "ERROR_TRANSCRIPTION_FAILED":
+                st.error("⚠️ Transcriptie mislukt. Probeer het later opnieuw.")
             else:
                 with st.spinner("🤖 AI analyseert sprekers en deelt tekst in..."):
                     instr = "Verdeel de tekst in duidelijke alinea's en geef sprekers aan (bijv. Spreker 1, Spreker 2)."
