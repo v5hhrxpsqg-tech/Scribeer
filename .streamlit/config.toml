@@ -3,6 +3,10 @@ maxUploadSize = 200
 maxMessageSize = 200
 enableXsrfProtection = true
 enableCORS = false
+enableWebsocketCompression = false
 
 [browser]
 gatherUsageStats = false
+
+[runner]
+fastReruns = true

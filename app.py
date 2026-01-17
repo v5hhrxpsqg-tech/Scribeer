@@ -115,10 +115,22 @@ def process_audio_logic(audio_file, guest_mode):
     if 'transcription_progress' not in st.session_state:
         st.session_state.transcription_progress = []
 
+    # Sla bestand eerst lokaal op voor stabielere verwerking
+    temp_input_file = f"temp_input_{int(time.time())}.audio"
     try:
-        with st.spinner("Audio laden..."):
-            full_audio = AudioSegment.from_file(audio_file)
+        with st.spinner("Audio uploaden..."):
+            with open(temp_input_file, "wb") as f:
+                f.write(audio_file.read())
+
+        with st.spinner("Audio laden en decoderen..."):
+            full_audio = AudioSegment.from_file(temp_input_file)
+
+        if os.path.exists(temp_input_file):
+            os.remove(temp_input_file)
+
     except Exception as e:
+        if os.path.exists(temp_input_file):
+            os.remove(temp_input_file)
         st.error(f"❌ Kon audio niet laden: {str(e)}")
         return "ERROR_LOAD_FAILED"
 
