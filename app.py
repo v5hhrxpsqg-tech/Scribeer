@@ -7,6 +7,7 @@ from pydub import AudioSegment
 import os
 import time
 from supabase import create_client, Client
+import extra_streamlit_components as stx
 
 # =================================================================
 # 1. INITIALISATIE
@@ -16,6 +17,13 @@ st.set_page_config(
     page_icon="🎙️",
     layout="wide"
 )
+
+# Cookie manager voor persistente login
+@st.cache_resource
+def get_cookie_manager():
+    return stx.CookieManager()
+
+cookie_manager = get_cookie_manager()
 
 # Sleutels ophalen
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
@@ -51,14 +59,18 @@ if "access_token" in params:
     refresh_token = params.get("refresh_token", "")
 
     try:
-        st.session_state.access_token = access_token
-        st.session_state.refresh_token = refresh_token
-
         user_response = supabase.auth.get_user(access_token)
 
         if user_response and user_response.user:
+            # Sla tokens op in cookies (7 dagen geldig)
+            cookie_manager.set("access_token", access_token, max_age=7*24*60*60)
+            cookie_manager.set("refresh_token", refresh_token, max_age=7*24*60*60)
+            cookie_manager.set("user_email", user_response.user.email, max_age=7*24*60*60)
+            cookie_manager.set("user_id", user_response.user.id, max_age=7*24*60*60)
+
             st.session_state.user = user_response.user
             st.session_state.authenticated = True
+            st.session_state.access_token = access_token
             st.query_params.clear()
             st.success("✅ Succesvol ingelogd!")
             st.rerun()
@@ -76,6 +88,40 @@ if "access_token" in params:
 user = None
 is_logged_in = False
 
+# Eerst: check session_state
+if st.session_state.get('authenticated') and st.session_state.get('user'):
+    user = st.session_state.user
+    is_logged_in = True
+else:
+    # Fallback: check cookies voor persistente login
+    saved_token = cookie_manager.get("access_token")
+    saved_email = cookie_manager.get("user_email")
+    saved_user_id = cookie_manager.get("user_id")
+
+    if saved_token and saved_email:
+        try:
+            # Verifieer dat de token nog geldig is
+            user_response = supabase.auth.get_user(saved_token)
+            if user_response and user_response.user:
+                st.session_state.user = user_response.user
+                st.session_state.authenticated = True
+                st.session_state.access_token = saved_token
+                user = user_response.user
+                is_logged_in = True
+            else:
+                # Token ongeldig, verwijder cookies
+                cookie_manager.delete("access_token")
+                cookie_manager.delete("refresh_token")
+                cookie_manager.delete("user_email")
+                cookie_manager.delete("user_id")
+        except Exception:
+            # Token verlopen of ongeldig
+            cookie_manager.delete("access_token")
+            cookie_manager.delete("refresh_token")
+            cookie_manager.delete("user_email")
+            cookie_manager.delete("user_id")
+
+# Backwards compat: als session_state user heeft maar geen object
 if st.session_state.get('authenticated') and st.session_state.get('user'):
     user = st.session_state.user
     is_logged_in = True
@@ -215,6 +261,7 @@ with st.sidebar.expander("🔧 Debug Info"):
 if is_logged_in:
     st.sidebar.success(f"✅ Ingelogd als: {user.email}")
     if st.sidebar.button("Uitloggen"):
+        # Verwijder session state
         if 'authenticated' in st.session_state:
             del st.session_state.authenticated
         if 'user' in st.session_state:
@@ -223,6 +270,12 @@ if is_logged_in:
             del st.session_state.access_token
         if 'refresh_token' in st.session_state:
             del st.session_state.refresh_token
+
+        # Verwijder cookies
+        cookie_manager.delete("access_token")
+        cookie_manager.delete("refresh_token")
+        cookie_manager.delete("user_email")
+        cookie_manager.delete("user_id")
 
         st.session_state.final_text = None
         st.session_state.magic_link_sent = False
