@@ -261,7 +261,7 @@ if is_logged_in:
         if credits_mb < 10:
             st.sidebar.warning("⚠️ Credits bijna op!")
     except Exception as e:
-        st.sidebar.error(f"Credits laden mislukt")
+        st.sidebar.error(f"Credits laden mislukt: {e}")
 
     # Koop credits sectie
     with st.sidebar.expander("🛒 Credits kopen"):
