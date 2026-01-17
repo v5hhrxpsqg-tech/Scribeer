@@ -7,7 +7,6 @@ from pydub import AudioSegment
 import os
 import time
 from supabase import create_client, Client
-from streamlit_local_storage import LocalStorage
 
 # =================================================================
 # 1. INITIALISATIE
@@ -17,9 +16,6 @@ st.set_page_config(
     page_icon="🎙️",
     layout="wide"
 )
-
-# Local storage voor persistente login
-local_storage = LocalStorage()
 
 # Sleutels ophalen
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
@@ -43,6 +39,12 @@ if 'magic_link_sent' not in st.session_state:
 # =================================================================
 params = st.query_params
 
+# Debug: toon URL params als er wat is
+if params:
+    with st.sidebar.expander("🔍 URL Debug", expanded=False):
+        st.write("URL parameters ontvangen:")
+        st.write(dict(params))
+
 # Check voor error in URL
 if "error" in params:
     error_msg = params.get("error_description", params.get("error", "Onbekende fout"))
@@ -58,12 +60,6 @@ if "access_token" in params:
         user_response = supabase.auth.get_user(access_token)
 
         if user_response and user_response.user:
-            # Sla tokens op in localStorage
-            local_storage.setItem("scribeer_access_token", access_token)
-            local_storage.setItem("scribeer_refresh_token", refresh_token)
-            local_storage.setItem("scribeer_user_email", user_response.user.email)
-            local_storage.setItem("scribeer_user_id", user_response.user.id)
-
             st.session_state.user = user_response.user
             st.session_state.authenticated = True
             st.session_state.access_token = access_token
@@ -84,39 +80,6 @@ if "access_token" in params:
 user = None
 is_logged_in = False
 
-# Eerst: check session_state
-if st.session_state.get('authenticated') and st.session_state.get('user'):
-    user = st.session_state.user
-    is_logged_in = True
-else:
-    # Fallback: check localStorage voor persistente login
-    saved_token = local_storage.getItem("scribeer_access_token")
-    saved_email = local_storage.getItem("scribeer_user_email")
-
-    if saved_token and saved_email:
-        try:
-            # Verifieer dat de token nog geldig is
-            user_response = supabase.auth.get_user(saved_token)
-            if user_response and user_response.user:
-                st.session_state.user = user_response.user
-                st.session_state.authenticated = True
-                st.session_state.access_token = saved_token
-                user = user_response.user
-                is_logged_in = True
-            else:
-                # Token ongeldig, verwijder localStorage
-                local_storage.deleteItem("scribeer_access_token")
-                local_storage.deleteItem("scribeer_refresh_token")
-                local_storage.deleteItem("scribeer_user_email")
-                local_storage.deleteItem("scribeer_user_id")
-        except Exception:
-            # Token verlopen of ongeldig
-            local_storage.deleteItem("scribeer_access_token")
-            local_storage.deleteItem("scribeer_refresh_token")
-            local_storage.deleteItem("scribeer_user_email")
-            local_storage.deleteItem("scribeer_user_id")
-
-# Backwards compat
 if st.session_state.get('authenticated') and st.session_state.get('user'):
     user = st.session_state.user
     is_logged_in = True
@@ -265,12 +228,6 @@ if is_logged_in:
             del st.session_state.access_token
         if 'refresh_token' in st.session_state:
             del st.session_state.refresh_token
-
-        # Verwijder localStorage
-        local_storage.deleteItem("scribeer_access_token")
-        local_storage.deleteItem("scribeer_refresh_token")
-        local_storage.deleteItem("scribeer_user_email")
-        local_storage.deleteItem("scribeer_user_id")
 
         st.session_state.final_text = None
         st.session_state.magic_link_sent = False
