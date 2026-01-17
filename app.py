@@ -35,7 +35,46 @@ if 'magic_link_sent' not in st.session_state:
     st.session_state.magic_link_sent = False
 
 # =================================================================
-# 2. EMAIL MAGIC LINK AUTH
+# 2. CREDIT SYSTEEM FUNCTIES
+# =================================================================
+def get_or_create_user_credits(user_email: str) -> dict:
+    """Haalt user credits op, of maakt nieuwe user aan met 50 MB."""
+    result = supabase.table('user_credits').select('*').eq('email', user_email).execute()
+
+    if result.data:
+        return result.data[0]
+    else:
+        new_user = supabase.table('user_credits').insert({
+            'email': user_email,
+            'credits_remaining_mb': 50.00
+        }).execute()
+        return new_user.data[0]
+
+def deduct_credits(user_email: str, mb_used: float) -> bool:
+    """Trekt credits af en update last_used. Returns True als gelukt."""
+    current = get_or_create_user_credits(user_email)
+    new_balance = float(current['credits_remaining_mb']) - mb_used
+
+    if new_balance < 0:
+        return False
+
+    supabase.table('user_credits').update({
+        'credits_remaining_mb': new_balance,
+        'last_used': 'now()'
+    }).eq('email', user_email).execute()
+    return True
+
+def log_usage(user_email: str, file_size_mb: float, credits_used: float, filename: str):
+    """Logt het gebruik naar de usage_logs tabel."""
+    supabase.table('usage_logs').insert({
+        'user_email': user_email,
+        'file_size_mb': file_size_mb,
+        'credits_used': credits_used,
+        'filename': filename
+    }).execute()
+
+# =================================================================
+# 3. EMAIL MAGIC LINK AUTH
 # =================================================================
 params = st.query_params
 
@@ -213,6 +252,39 @@ with st.sidebar.expander("🔧 Debug Info"):
 
 if is_logged_in:
     st.sidebar.success(f"✅ Ingelogd als: {user.email}")
+
+    # Toon credits
+    try:
+        user_credits = get_or_create_user_credits(user.email)
+        credits_mb = float(user_credits['credits_remaining_mb'])
+        st.sidebar.metric("💰 Credits", f"{credits_mb:.1f} minuten")
+        if credits_mb < 10:
+            st.sidebar.warning("⚠️ Credits bijna op!")
+    except Exception as e:
+        st.sidebar.error(f"Credits laden mislukt")
+
+    # Koop credits sectie
+    with st.sidebar.expander("🛒 Credits kopen"):
+        st.markdown("""
+        **Kies een pakket:**
+
+        | Pakket | Prijs |
+        |--------|-------|
+        | 100 min | €4,99 |
+        | 300 min | €11,99 |
+        | 500 min | €15,99 |
+        """)
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.link_button("100", "https://buy.stripe.com/test_6oUcN5e65fuz2uYdWveZ200")
+        with col2:
+            st.link_button("300", "https://buy.stripe.com/test_8x2eVdd2196bb1u3hReZ201")
+        with col3:
+            st.link_button("500", "https://buy.stripe.com/test_00w6oH4vv0zF3z25pZeZ202")
+
+        st.caption("Na betaling worden credits automatisch toegevoegd.")
+
     if st.sidebar.button("Uitloggen"):
         # Verwijder session state
         for key in ['authenticated', 'user', 'access_token', 'refresh_token']:
@@ -286,14 +358,32 @@ audio_input = st.file_uploader("Upload audio (MP3, WAV, M4A)", type=["mp3", "wav
 
 if audio_input and st.session_state.final_text is None:
     file_mb = audio_input.size / (1024 * 1024)
-    
+    filename = audio_input.name
+
+    # Check credits voor ingelogde users
+    has_enough_credits = True
+    if is_logged_in:
+        try:
+            user_credits = get_or_create_user_credits(user.email)
+            credits_min = float(user_credits['credits_remaining_mb'])
+            if credits_min < file_mb:
+                has_enough_credits = False
+                st.error(f"⚠️ Onvoldoende credits. Je hebt {credits_min:.1f} minuten, maar dit bestand kost {file_mb:.1f} minuten.")
+            else:
+                st.info(f"📁 Bestand: {file_mb:.1f} minuten | Credits na verwerking: {credits_min - file_mb:.1f} minuten")
+        except Exception as e:
+            st.error(f"Kon credits niet controleren: {e}")
+            has_enough_credits = False
+
     if not is_logged_in and file_mb > 25:
         st.error(f"⚠️ Dit bestand ({file_mb:.1f}MB) is te groot voor gasten.")
         st.warning("Log in om bestanden tot 200MB te verwerken.")
+    elif not has_enough_credits:
+        pass  # Error al getoond
     else:
         if not is_logged_in and file_mb > 5:
             st.warning("⏱️ Preview: Je ontvangt als gast een transcriptie van de eerste 10 minuten.")
-        
+
         if st.button("🚀 Start Verwerking"):
             raw_output = process_audio_logic(audio_input, not is_logged_in)
 
@@ -304,11 +394,19 @@ if audio_input and st.session_state.final_text is None:
             elif raw_output == "ERROR_TRANSCRIPTION_FAILED":
                 st.error("⚠️ Transcriptie mislukt. Probeer het later opnieuw.")
             else:
+                # Credits aftrekken na succesvolle transcriptie
+                if is_logged_in:
+                    try:
+                        deduct_credits(user.email, file_mb)
+                        log_usage(user.email, file_mb, file_mb, filename)
+                    except Exception as e:
+                        st.warning(f"Credits konden niet worden afgetrokken: {e}")
+
                 with st.spinner("🤖 AI analyseert sprekers en deelt tekst in..."):
                     instr = "Verdeel de tekst in duidelijke alinea's en geef sprekers aan (bijv. Spreker 1, Spreker 2)."
                     if chosen_lang != "Geen (originele taal)":
                         instr += f" Vertaal de gehele tekst naar het {chosen_lang}."
-                    
+
                     ai_res = client.chat.completions.create(
                         model="gpt-4o-mini",
                         messages=[
