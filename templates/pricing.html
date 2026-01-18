@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="nl" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scribeer.nl - Credits Kopen</title>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-base-200 min-h-screen">
+    <!-- Navbar -->
+    <div class="navbar bg-base-100 shadow-lg">
+        <div class="flex-1 px-4">
+            <a href="{{ url_for('dashboard') }}" class="text-xl font-bold">Scribeer.nl</a>
+        </div>
+        <div class="flex-none gap-4 px-4">
+            <a href="{{ url_for('dashboard') }}" class="btn btn-ghost">
+                Terug naar dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Main content -->
+    <main class="container mx-auto px-4 py-8">
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold mb-2">Credits Kopen</h1>
+            <p class="text-base-content/70">Kies het pakket dat bij je past</p>
+        </div>
+
+        <!-- Pricing cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+            <!-- Small pakket -->
+            <div class="card bg-base-100 shadow-xl">
+                <div class="card-body text-center">
+                    <h2 class="card-title justify-center text-2xl">Starter</h2>
+                    <p class="text-4xl font-bold text-primary my-4">€4,99</p>
+                    <div class="divider"></div>
+                    <ul class="space-y-2 text-left">
+                        <li class="flex items-center gap-2">
+                            <svg class="w-5 h-5 text-success" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            <span><strong>100 minuten</strong> transcriptie</span>
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <svg class="w-5 h-5 text-success" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            <span>Speaker diarization</span>
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <svg class="w-5 h-5 text-success" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            <span>Word & PDF export</span>
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <svg class="w-5 h-5 text-success" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            <span>€0,05 per minuut</span>
+                        </li>
+                    </ul>
+                    <div class="card-actions justify-center mt-6">
+                        <a href="{{ url_for('checkout', package_id='small') }}" class="btn btn-outline btn-primary w-full">
+                            Kies Starter
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Medium pakket - Most popular -->
+            <div class="card bg-base-100 shadow-xl border-2 border-primary">
+                <div class="card-body text-center">
+                    <div class="badge badge-primary absolute top-4 right-4">Populair</div>
+                    <h2 class="card-title justify-center text-2xl">Professional</h2>
+                    <p class="text-4xl font-bold text-primary my-4">€11,99</p>
+                    <div class="divider"></div>
+                    <ul class="space-y-2 text-left">
+                        <li class="flex items-center gap-2">
+                            <svg class="w-5 h-5 text-success" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            <span><strong>300 minuten</strong> transcriptie</span>
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <svg class="w-5 h-5 text-success" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            <span>Speaker diarization</span>
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <svg class="w-5 h-5 text-success" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            <span>Word & PDF export</span>
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <svg class="w-5 h-5 text-success" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            <span>€0,04 per minuut</span>
+                        </li>
+                    </ul>
+                    <div class="card-actions justify-center mt-6">
+                        <a href="{{ url_for('checkout', package_id='medium') }}" class="btn btn-primary w-full">
+                            Kies Professional
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Large pakket -->
+            <div class="card bg-base-100 shadow-xl">
+                <div class="card-body text-center">
+                    <div class="badge badge-secondary absolute top-4 right-4">Beste waarde</div>
+                    <h2 class="card-title justify-center text-2xl">Enterprise</h2>
+                    <p class="text-4xl font-bold text-primary my-4">€15,99</p>
+                    <div class="divider"></div>
+                    <ul class="space-y-2 text-left">
+                        <li class="flex items-center gap-2">
+                            <svg class="w-5 h-5 text-success" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            <span><strong>500 minuten</strong> transcriptie</span>
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <svg class="w-5 h-5 text-success" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            <span>Speaker diarization</span>
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <svg class="w-5 h-5 text-success" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            <span>Word & PDF export</span>
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <svg class="w-5 h-5 text-success" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            <span>€0,03 per minuut</span>
+                        </li>
+                    </ul>
+                    <div class="card-actions justify-center mt-6">
+                        <a href="{{ url_for('checkout', package_id='large') }}" class="btn btn-outline btn-secondary w-full">
+                            Kies Enterprise
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment methods -->
+        <div class="text-center mt-8">
+            <p class="text-base-content/60 text-sm">
+                Veilig betalen met iDEAL of creditcard via Stripe
+            </p>
+        </div>
+    </main>
+</body>
+</html>

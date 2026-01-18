@@ -1,9 +1,13 @@
 import os
-from flask import Flask, render_template, session, redirect, url_for, request, flash
+from flask import Flask, render_template, session, redirect, url_for, request, flash, Response, send_file
+from io import BytesIO
+from docx import Document
+from fpdf import FPDF
 from dotenv import load_dotenv
 from supabase import create_client
 from deepgram import DeepgramClient
 from datetime import datetime
+import stripe
 
 # 1. Gegevens laden uit .env
 load_dotenv()
@@ -17,6 +21,16 @@ supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
 
 # 3. Deepgram koppelen
 deepgram = DeepgramClient(api_key=os.getenv("DEEPGRAM_API_KEY"))
+
+# 4. Stripe koppelen
+stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+
+# Credit pakketten (minuten, prijs, Stripe Payment Link)
+CREDIT_PACKAGES = {
+    'small': {'minutes': 100, 'price': 499, 'name': '100 minuten', 'stripe_link': 'https://buy.stripe.com/test_6oUcN5e65fuz2uYdWveZ200'},
+    'medium': {'minutes': 300, 'price': 1199, 'name': '300 minuten', 'stripe_link': 'https://buy.stripe.com/test_8x2eVdd2196bb1u3hReZ201'},
+    'large': {'minutes': 500, 'price': 1599, 'name': '500 minuten', 'stripe_link': 'https://buy.stripe.com/test_00w6oH4vv0zF3z25pZeZ202'},
+}
 
 # =================================================================
 # HELPER FUNCTIES
@@ -46,6 +60,15 @@ def deduct_credits(user_email: str, mb_used: float) -> bool:
         'credits_remaining_mb': new_balance
     }).eq('email', user_email).execute()
     return True
+
+def add_credits(user_email: str, minutes_to_add: float):
+    """Voegt credits toe aan gebruiker."""
+    current = get_or_create_user_credits(user_email)
+    new_balance = float(current['credits_remaining_mb']) + minutes_to_add
+
+    supabase.table('user_credits').update({
+        'credits_remaining_mb': new_balance
+    }).eq('email', user_email).execute()
 
 def save_transcription(user_id: str, user_email: str, filename: str, transcript: str, duration_minutes: float):
     """Slaat transcriptie op in de database."""
@@ -272,6 +295,130 @@ def view_transcription(transcription_id):
     transcription = result.data[0]
     return render_template('transcription.html', user=user, transcription=transcription)
 
+@app.route('/download/<int:transcription_id>/<format>')
+def download_transcription(transcription_id, format):
+    """Download transcriptie als Word of PDF"""
+    if 'user' not in session:
+        flash('Je moet eerst inloggen', 'error')
+        return redirect(url_for('login'))
+
+    user = session['user']
+
+    # Haal transcriptie op
+    result = supabase.table('transcriptions').select('*').eq('id', transcription_id).eq('user_email', user['email']).execute()
+
+    if not result.data:
+        flash('Transcriptie niet gevonden', 'error')
+        return redirect(url_for('dashboard'))
+
+    transcription = result.data[0]
+    transcript_text = transcription['transcript']
+    filename_base = transcription['filename'].rsplit('.', 1)[0]
+
+    # Verwijder markdown formatting voor schone tekst
+    clean_text = transcript_text.replace('**', '')
+
+    if format == 'docx':
+        # Maak Word document
+        doc = Document()
+        doc.add_heading(f'Transcriptie: {transcription["filename"]}', 0)
+        doc.add_paragraph(f'Datum: {transcription["created_at"][:10]}')
+        doc.add_paragraph(f'Duur: {transcription["duration_minutes"]:.1f} minuten')
+        doc.add_paragraph('')
+
+        # Voeg transcriptie toe per paragraaf
+        for para in clean_text.split('\n\n'):
+            if para.strip():
+                doc.add_paragraph(para.strip())
+
+        # Sla op in memory
+        buffer = BytesIO()
+        doc.save(buffer)
+        buffer.seek(0)
+
+        return Response(
+            buffer.getvalue(),
+            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            headers={'Content-Disposition': f'attachment; filename={filename_base}_transcriptie.docx'}
+        )
+
+    elif format == 'pdf':
+        try:
+            # Maak PDF document
+            pdf = FPDF()
+            pdf.add_page()
+            pdf.set_auto_page_break(auto=True, margin=15)
+
+            # Titel
+            pdf.set_font('Helvetica', 'B', 16)
+            pdf.cell(0, 10, f'Transcriptie: {transcription["filename"]}', new_x='LMARGIN', new_y='NEXT')
+
+            # Metadata
+            pdf.set_font('Helvetica', '', 10)
+            pdf.cell(0, 6, f'Datum: {transcription["created_at"][:10]}', new_x='LMARGIN', new_y='NEXT')
+            pdf.cell(0, 6, f'Duur: {transcription["duration_minutes"]:.1f} minuten', new_x='LMARGIN', new_y='NEXT')
+            pdf.ln(10)
+
+            # Transcriptie tekst
+            pdf.set_font('Helvetica', '', 11)
+            # Encode tekst voor PDF compatibiliteit
+            safe_text = clean_text.encode('latin-1', 'replace').decode('latin-1')
+            pdf.multi_cell(0, 6, safe_text)
+
+            # Output naar BytesIO buffer
+            pdf_buffer = BytesIO()
+            pdf_buffer.write(pdf.output())
+            pdf_buffer.seek(0)
+
+            return send_file(
+                pdf_buffer,
+                mimetype='application/pdf',
+                as_attachment=True,
+                download_name=f'{filename_base}_transcriptie.pdf'
+            )
+        except Exception as e:
+            print(f"PDF error: {str(e)}")
+            flash(f'PDF generatie mislukt: {str(e)}', 'error')
+            return redirect(url_for('view_transcription', transcription_id=transcription_id))
+
+    else:
+        flash('Ongeldig formaat', 'error')
+        return redirect(url_for('view_transcription', transcription_id=transcription_id))
+
+@app.route('/pricing')
+def pricing():
+    """Pricing pagina met credit pakketten"""
+    if 'user' not in session:
+        flash('Je moet eerst inloggen', 'error')
+        return redirect(url_for('login'))
+
+    user = session['user']
+    return render_template('pricing.html', user=user, packages=CREDIT_PACKAGES)
+
+@app.route('/checkout/<package_id>')
+def checkout(package_id):
+    """Redirect naar Stripe Payment Link"""
+    if 'user' not in session:
+        flash('Je moet eerst inloggen', 'error')
+        return redirect(url_for('login'))
+
+    if package_id not in CREDIT_PACKAGES:
+        flash('Ongeldig pakket', 'error')
+        return redirect(url_for('pricing'))
+
+    package = CREDIT_PACKAGES[package_id]
+    user = session['user']
+
+    # Redirect naar Stripe Payment Link met client_reference_id voor identificatie
+    stripe_url = f"{package['stripe_link']}?client_reference_id={user['email']}&prefilled_email={user['email']}"
+    return redirect(stripe_url)
+
+@app.route('/payment/success')
+def payment_success():
+    """Bedankpagina na succesvolle betaling - credits worden via Supabase webhook toegevoegd"""
+    flash('Bedankt voor je aankoop! Je credits worden binnen enkele seconden toegevoegd.', 'success')
+    return redirect(url_for('dashboard'))
+
 @app.route('/logout')
 def logout():
     """Uitloggen - verwijder sessie"""
@@ -280,4 +427,4 @@ def logout():
     return redirect(url_for('login'))
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, threaded=True)
