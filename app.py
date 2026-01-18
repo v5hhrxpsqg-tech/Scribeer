@@ -143,10 +143,11 @@ def login():
         email = request.form.get('email')
         if email:
             try:
+                base_url = os.getenv("BASE_URL", "http://127.0.0.1:5000")
                 supabase.auth.sign_in_with_otp({
                     "email": email,
                     "options": {
-                        "email_redirect_to": "http://127.0.0.1:5000/callback"
+                        "email_redirect_to": f"{base_url}/callback"
                     }
                 })
                 flash('Check je email voor de login link!', 'success')
