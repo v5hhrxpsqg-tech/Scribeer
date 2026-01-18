@@ -54,13 +54,26 @@
             <div class="card-body">
                 <h2 class="card-title">Audio uploaden</h2>
                 <p class="text-sm text-base-content/60 mb-4">
-                    Ondersteunde formaten: MP3, WAV, M4A (max 200MB)
+                    Ondersteunde formaten: MP3, WAV, M4A, OGG, FLAC (max 200MB)
                 </p>
 
-                <!-- TODO: Upload formulier komt hier -->
-                <div class="border-2 border-dashed border-base-300 rounded-lg p-8 text-center">
-                    <p class="text-base-content/50">Upload functie komt in de volgende stap</p>
-                </div>
+                <form action="{{ url_for('upload') }}" method="POST" enctype="multipart/form-data" id="uploadForm">
+                    <div class="form-control w-full">
+                        <input
+                            type="file"
+                            name="audio"
+                            accept=".mp3,.wav,.m4a,.ogg,.flac"
+                            class="file-input file-input-bordered file-input-primary w-full"
+                            id="audioInput"
+                            required
+                        >
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-full mt-4" id="submitBtn">
+                        <span id="btnText">Start Transcriptie</span>
+                        <span id="btnLoading" class="hidden loading loading-spinner"></span>
+                    </button>
+                </form>
 
                 {% if credits < 10 %}
                 <div class="alert alert-warning mt-4">
@@ -69,6 +82,41 @@
                 {% endif %}
             </div>
         </div>
+
+        <!-- Recente transcripties -->
+        {% if transcriptions %}
+        <div class="card bg-base-100 shadow-xl max-w-2xl mx-auto mt-6">
+            <div class="card-body">
+                <h2 class="card-title">Je transcripties</h2>
+                <div class="overflow-x-auto">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Bestand</th>
+                                <th>Duur</th>
+                                <th>Datum</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for t in transcriptions %}
+                            <tr>
+                                <td>{{ t.filename }}</td>
+                                <td>{{ t.duration_minutes|round(1) }} min</td>
+                                <td>{{ t.created_at[:10] }}</td>
+                                <td>
+                                    <a href="{{ url_for('view_transcription', transcription_id=t.id) }}" class="btn btn-sm btn-ghost">
+                                        Bekijk
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
 
         <!-- Credits info -->
         <div class="card bg-base-100 shadow-xl max-w-2xl mx-auto mt-6">
@@ -84,5 +132,14 @@
             </div>
         </div>
     </main>
+
+    <script>
+        // Toon loading state bij upload
+        document.getElementById('uploadForm').addEventListener('submit', function() {
+            document.getElementById('btnText').classList.add('hidden');
+            document.getElementById('btnLoading').classList.remove('hidden');
+            document.getElementById('submitBtn').disabled = true;
+        });
+    </script>
 </body>
 </html>
