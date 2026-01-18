@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="nl" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scribeer.nl - Inloggen...</title>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-base-200 min-h-screen flex items-center justify-center">
+    <div class="card bg-base-100 shadow-xl w-full max-w-md">
+        <div class="card-body text-center">
+            <span class="loading loading-spinner loading-lg mx-auto"></span>
+            <h2 class="text-xl mt-4">Even geduld...</h2>
+            <p class="text-base-content/70">Je wordt ingelogd.</p>
+        </div>
+    </div>
+
+    <script>
+        // Haal de hash fragment uit de URL (alles na #)
+        const hash = window.location.hash.substring(1);
+
+        if (hash) {
+            // Parse de parameters
+            const params = new URLSearchParams(hash);
+            const accessToken = params.get('access_token');
+
+            if (accessToken) {
+                // Stuur door naar de server met de token als query parameter
+                window.location.href = '/auth/verify?access_token=' + accessToken;
+            } else {
+                window.location.href = '/login?error=no_token';
+            }
+        } else {
+            window.location.href = '/login?error=no_hash';
+        }
+    </script>
+</body>
+</html>

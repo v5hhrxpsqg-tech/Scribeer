@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="nl" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scribeer.nl - Login</title>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-base-200 min-h-screen flex items-center justify-center">
+    <div class="card bg-base-100 shadow-xl w-full max-w-md">
+        <div class="card-body">
+            <h1 class="card-title text-3xl justify-center mb-2">Scribeer.nl</h1>
+            <p class="text-center text-base-content/70 mb-6">Jouw AI Notulist</p>
+
+            <!-- Flash berichten -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert {% if category == 'success' %}alert-success{% else %}alert-error{% endif %} mb-4">
+                            <span>{{ message }}</span>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <!-- Login formulier -->
+            <form method="POST" action="{{ url_for('login') }}">
+                <div class="form-control w-full">
+                    <label class="label">
+                        <span class="label-text">Email adres</span>
+                    </label>
+                    <input
+                        type="email"
+                        name="email"
+                        placeholder="jouw@email.nl"
+                        class="input input-bordered w-full"
+                        required
+                    >
+                </div>
+
+                <button type="submit" class="btn btn-primary w-full mt-6">
+                    Stuur login link
+                </button>
+            </form>
+
+            <div class="divider">of</div>
+
+            <p class="text-center text-sm text-base-content/60">
+                Geen account nodig - we sturen je een magic link per email.
+            </p>
+        </div>
+    </div>
+</body>
+</html>
